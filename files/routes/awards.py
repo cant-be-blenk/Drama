@@ -404,7 +404,7 @@ def award_post(pid, v):
 			c.ghost = True
 			g.db.add(c)
 	elif kind == "nword":
-		author.has_nwordpass = True
+		author.nwordpass = True
 		if not author.has_badge(108):
 			new_badge = Badge(badge_id=108, user_id=author.id)
 			g.db.add(new_badge)
@@ -630,7 +630,7 @@ def award_comment(cid, v):
 		c.ghost = True
 		g.db.add(c)
 	elif kind == "nword":
-		author.has_nwordpass = True
+		author.nwordpass = True
 		if not author.has_badge(108):
 			new_badge = Badge(badge_id=108, user_id=author.id)
 			g.db.add(new_badge)
