@@ -502,7 +502,7 @@ AWARDS = {
 	},
 	"nword": {
 		"kind": "nword",
-		"title": "NWord Pass",
+		"title": "Nword Pass",
 		"description": "Gives the recipient the ability to speak that which must not be spoken",
 		"icon": "fas fa-edit",
 		"color": "text-success",
