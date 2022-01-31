@@ -629,6 +629,13 @@ def award_comment(cid, v):
 	elif kind == "ghosts":
 		c.ghost = True
 		g.db.add(c)
+	elif kind == "nword":
+		author.has_nwordpass = True
+		if not author.has_badge(108):
+			new_badge = Badge(badge_id=108, user_id=author.id)
+			g.db.add(new_badge)
+			g.db.flush()
+			send_notification(author.id, f"@AutoJanny has given you the following profile badge:\n\n![]({new_badge.path})\n\n{new_badge.name}")
 
 	if c.author.received_award_count: c.author.received_award_count += 1
 	else: c.author.received_award_count = 1
