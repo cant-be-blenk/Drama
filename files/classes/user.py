@@ -124,7 +124,7 @@ class User(Base):
 	ban_evade = Column(Integer, default=0)
 	original_username = deferred(Column(String))
 	referred_by = Column(Integer, ForeignKey("users.id"))
-	has_nwordpass = Column(Boolean, default=False)
+	nwordpass = Column(Boolean)
 	
 	badges = relationship("Badge", viewonly=True)
 	subscriptions = relationship("Subscription", viewonly=True)
