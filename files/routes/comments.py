@@ -413,7 +413,7 @@ def api_comment(v):
 		n = Notification(comment_id=c_jannied.id, user_id=v.id)
 		g.db.add(n)
 	
-	if 'nigg' in body and not v.has_nwordpass:
+	if 'nigg' in body and not v.nwordpass:
 
 		no_pass_phrase = """Sorry whiteboy, we're gonna need to see some ID before you start throwin that word around like it's nothing.\n\nTake a 30 minute time-out and come back when you've learned your lesson and/or paid reparations (by purchasing a BIPOC Approved™ Rdrama NWord Pass© from the shop) \n\n*This is an automated message; if you need help,
 		you can message us [here](/contact).*"""
