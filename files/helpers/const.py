@@ -11,6 +11,7 @@ from os import path
 
 SITE = environ.get("SITE").strip()
 SITE_NAME = environ.get("SITE_NAME").strip()
+SITE_HOSTS = environ.get("SITE_HOSTS").strip()
 SECRET_KEY = environ.get("SECRET_KEY").strip()
 PROXY_URL = environ.get("PROXY_URL").strip()
 GIPHY_KEY = environ.get('GIPHY_KEY').strip()
@@ -1087,7 +1088,8 @@ if SITE_NAME == 'PCM':
 	#AWARDS_DISABLED.extend(['ban','pizzashill','marsey','bird','grass','chud','unblockable'])
 	AWARDS_DISABLED.extend(['unblockable'])
 	AWARDS_DISABLED.remove('ghost')
-
+elif SITE_NAME == 'WPD':
+	AWARDS_DISABLED.remove('lootbox')
 if not FEATURES['PROCOINS']:
 	AWARDS_DISABLED.append('benefactor')
 
