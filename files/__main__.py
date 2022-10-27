@@ -133,4 +133,7 @@ if "load_chat" in argv:
 else:
 	from files.routes import *
 
+if "halloween" in argv:
+	from files.events.halloween import *
+
 stdout.flush()

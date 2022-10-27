@@ -35,10 +35,10 @@
 					styles = document.createElement("link")
 
 				styles.setAttribute("rel", "stylesheet")
-				styles.setAttribute("href", "{{'css/halloween/upsidedown.css' | asset}}")
+				styles.setAttribute("href", "{{'event/css/upsidedown.css' | asset}}")
 				document.head.appendChild(styles)
 
-				script.setAttribute("src", "{{'js/halloween/upsidedown.js' | asset}}")
+				script.setAttribute("src", "{{'event/js/upsidedown.js' | asset}}")
 				document.head.appendChild(script)
 			}
 		</script>
@@ -51,7 +51,7 @@
 		{% set audio_src = "/assets/media" + jumpscare_path + "/" + listdir('files/assets/media' + jumpscare_path)|random() + '?v=45' %}
 		{% set image_src = "/assets/images" + jumpscare_path + "/" + listdir('files/assets/images' + jumpscare_path)|random() + '?v=45' %}
 		<img src="{{image_src}}" id="jump-scare-img" style="display: none;"/>
-		<script src="{{'js/halloween/jumpscare.js' | asset}}"></script>
+		<script src="{{'event/js/jumpscare.js' | asset}}"></script>
 		{% set roll = range(1,11) | random %}
 		<script>
 			const jumpscare_audio = new Audio("{{audio_src}}");

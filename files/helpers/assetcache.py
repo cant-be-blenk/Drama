@@ -5,7 +5,7 @@ import gevent
 import gevent_inotifyx as inotify
 
 ASSET_DIR = 'files/assets'
-ASSET_SUBDIRS = ['/css', '/js', '/css/halloween', '/js/halloween']
+ASSET_SUBDIRS = ['/css', '/js']
 ASSET_URL = '/assets/'
 ASSET_CACHE = defaultdict(lambda: None)
 
@@ -15,6 +15,8 @@ def assetcache_build(asset_dir, subdirs):
 			for fname in files:
 				fpath = root + '/' + fname
 				relpath = fpath[len(asset_dir) + 1:].replace('\\', '/')
+				if fname == 'halloween':
+					fpath = os.readlink(fpath)
 				with open(fpath, 'rb') as f:
 					fhash = zlib.crc32(f.read())
 					ASSET_CACHE[relpath] = '%x' % fhash
