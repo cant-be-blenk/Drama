@@ -1484,6 +1484,8 @@ BOOSTED_SITES = {
 	'nairaland.com',
 	'marsey.club',
 	'odysee.com',
+	'trp.red',
+	'forums.red'
 }
 
 IMAGE_FORMATS = ('webp','jpg','jpeg','png','gif','gifv','tif','tiff')
