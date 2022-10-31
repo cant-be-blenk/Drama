@@ -8,6 +8,7 @@ from files.classes.marsey import Marsey
 from flask import request
 import tldextract
 from os import path
+from .events import event
 
 SITE = environ.get("SITE").strip()
 SITE_NAME = environ.get("SITE_NAME").strip()
@@ -1172,6 +1173,13 @@ elif SITE_NAME == 'WPD':
 	AWARDS_DISABLED.remove('lootbox')
 if not FEATURES['PROCOINS']:
 	AWARDS_DISABLED.append('benefactor')
+
+if event:
+	AWARDS.update(event.EVENT_AWARDS)
+
+	for award in event.EVENT_AWARDS:
+		if award in AWARDS_DISABLED:
+			AWARDS_DISABLED.remove(award)
 
 AWARDS2 = {x: AWARDS[x] for x in AWARDS if x not in AWARDS_DISABLED}
 AWARDS3 = {x: AWARDS2[x] for x in AWARDS2 if AWARDS2[x]['price'] <= 500}

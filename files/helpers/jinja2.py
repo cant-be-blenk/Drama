@@ -6,6 +6,7 @@ from .const import *
 import time
 from files.helpers.assetcache import assetcache_path
 from files.helpers.wrappers import calc_users
+from .events import EVENT_ACTIVE
 
 @app.template_filter("post_embed")
 def post_embed(id, v):
@@ -33,7 +34,7 @@ def timestamp(timestamp):
 
 @app.context_processor
 def inject_constants():
-	return {"environ":environ, "SITE":SITE, "SITE_NAME":SITE_NAME, "SITE_FULL":SITE_FULL,
+	constants = {"environ":environ, "SITE":SITE, "SITE_NAME":SITE_NAME, "SITE_FULL":SITE_FULL,
 			"AUTOJANNY_ID":AUTOJANNY_ID, "PUSHER_ID":PUSHER_ID, 
 			"CC":CC, "CC_TITLE":CC_TITLE, "listdir":listdir, "AEVANN_ID":AEVANN_ID, 
 			"PIZZASHILL_ID":PIZZASHILL_ID, "DEFAULT_COLOR":DEFAULT_COLOR, 
@@ -52,5 +53,7 @@ def inject_constants():
 			"EMAIL_REGEX_PATTERN":EMAIL_REGEX_PATTERN,
 			"CONTENT_SECURITY_POLICY_DEFAULT":CONTENT_SECURITY_POLICY_DEFAULT,
 			"CONTENT_SECURITY_POLICY_HOME":CONTENT_SECURITY_POLICY_HOME,
-			"TRUESCORE_DONATE_LIMIT":TRUESCORE_DONATE_LIMIT,
+			"TRUESCORE_DONATE_LIMIT":TRUESCORE_DONATE_LIMIT, "EVENT_ACTIVE":EVENT_ACTIVE,
 			}
+	if event: constants.update(event.EVENT_JINJA_CONST)
+	return constants
