@@ -17,6 +17,8 @@ class Leaderboard:
 	all_users = None
 	v_position = 0
 	v_value = None
+	v_appears_in_ranking = False
+	user_func = None
 	value_func = None
 
 	def __init__(self, header_name:str, table_header_name:str, html_id:str, table_column_name:str, 
@@ -32,12 +34,14 @@ class Leaderboard:
 		self.all_users = lb[0]
 		self.v_position = lb[1]
 		self.v_value = lb[2]
-		if not self.v_value:
-			if value_func:
-				self.value_func = value_func
-				self.v_value = value_func(v)
-			else:
-				self.value_func = lambda u: u[1] or 0
+		self.v_appears_in_ranking = self.v_position and self.v_position <= len(self.all_users)
+		if value_func:
+			self.user_func = lambda u:u
+			self.value_func = value_func
+			self.v_value = value_func(v)
+		else:
+			self.user_func = lambda u:u[0]
+			self.value_func = lambda u: u[1] or 0
 
 	@classmethod
 	def get_simple_lb(cls, order_by, v:User, db:scoped_session, users, limit:int):
@@ -89,10 +93,9 @@ class Leaderboard:
 	
 	@classmethod
 	def get_hat_lb(cls, lb_criteria, v:User, db:scoped_session, users:Any, limit):
-		leaderboard = db.query(User.id, func.count(lb_criteria)).join(lb_criteria).group_by(User).order_by(func.count(lb_criteria).desc())
+		leaderboard = db.query(User, func.count(lb_criteria)).join(lb_criteria).group_by(User).order_by(func.count(lb_criteria).desc())
 		sq = db.query(User.id, cls.count_and_label(lb_criteria), cls.rank_filtered_rank_label_by_desc(lb_criteria)).join(lb_criteria).group_by(User).subquery()
 		position = db.query(sq.c.rank, sq.c.count).filter(sq.c.id == v.id).limit(1).one_or_none()
 		if not position: position = (leaderboard.count() + 1, 0)
 		leaderboard = leaderboard.limit(limit).all()
 		return (leaderboard, position[0], position[1])
-	

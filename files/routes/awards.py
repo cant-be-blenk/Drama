@@ -41,10 +41,8 @@ def shop(v):
 @app.post("/buy/<award>")
 @limiter.limit("100/minute;200/hour;1000/day")
 @auth_required
-@feature_required('BADGES')
+@feature_required('AWARDS')
 def buy(v, award):
-	
-
 	if award == 'benefactor' and not request.values.get("mb"):
 		abort(403, "You can only buy the Benefactor award with marseybux.")
 
@@ -124,7 +122,7 @@ def buy(v, award):
 @limiter.limit("1/second;30/minute;200/hour;1000/day")
 @limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @is_not_permabanned
-@feature_required('BADGES')
+@feature_required('AWARDS')
 def award_thing(v, thing_type, id):
 	if thing_type == 'post': thing = get_post(id)
 	else: thing = get_comment(id)
@@ -171,7 +169,7 @@ def award_thing(v, thing_type, id):
 	if v.id != author.id:
 		safe_username = "👻" if thing.ghost else f"@{author.username}"
 		
-		if author.deflector and v.deflector:
+		if author.deflector and v.deflector and AWARDS[kind]['deflectable']:
 			msg = f"@{v.username} has tried to give your [{thing_type}]({thing.shortlink}) the {AWARDS[kind]['title']} Award but it was deflected on them, they also had a deflector up, so it bounced back and forth until it vaporized!"
 			send_repeatable_notification(author.id, msg)
 

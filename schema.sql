@@ -391,8 +391,7 @@ CREATE TABLE public.comments (
     blackjack_result character varying(860),
     treasure_amount character varying(10),
     wordle_result character varying(115),
-    body_ts tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, (body)::text)) STORED,
-    casino_game_id integer
+    body_ts tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, (body)::text)) STORED
 );
 
 
@@ -1009,7 +1008,6 @@ CREATE TABLE public.users (
     total_lottery_winnings integer DEFAULT 0 NOT NULL,
     offsitementions boolean DEFAULT false NOT NULL,
     last_active integer DEFAULT 0 NOT NULL,
-    poorcel boolean DEFAULT false NOT NULL,
     last_viewed_post_notifs integer NOT NULL,
     pronouns character varying(11) NOT NULL,
     last_viewed_log_notifs integer NOT NULL,
@@ -1022,11 +1020,7 @@ CREATE TABLE public.users (
     is_muted boolean DEFAULT false NOT NULL,
     coins_spent_on_hats integer DEFAULT 0 NOT NULL,
     rainbow integer,
-    spider integer,
-    homoween_zombie character varying(7) DEFAULT 'HEALTHY'::character varying,
-    jumpscare integer DEFAULT 0 NOT NULL,
-    hwmusic boolean DEFAULT false NOT NULL,
-    hw_zombie integer DEFAULT 0 NOT NULL
+    spider integer
 );
 
 
@@ -2156,14 +2150,6 @@ ALTER TABLE ONLY public.userblocks
 
 
 --
--- Name: comments casino_game_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.comments
-    ADD CONSTRAINT casino_game_fkey FOREIGN KEY (casino_game_id) REFERENCES public.casino_games(id);
-
-
---
 -- Name: casino_games casino_games_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2694,4 +2680,3 @@ ALTER TABLE ONLY public.comment_option_votes
 --
 -- PostgreSQL database dump complete
 --
-
