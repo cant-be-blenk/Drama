@@ -3,9 +3,9 @@
   {% if banner_day < 1 %}
     {% set banner_day = 1 %}  
   {% endif %}
-  <link rel="stylesheet" href="{{'css/halloween/banner.css' | asset}}">
+  <link rel="stylesheet" href="{{'css/event/banner.css' | asset}}">
   {% if '/post/' not in request.path %}
-  <script defer src="{{'js/halloween/banner.js' | asset}}"></script>
+  <script defer src="{{'js/event/banner.js' | asset}}"></script>
   <style>
     #banner-halloween-title {
       animation: float infinite 8s ease-in-out;
@@ -200,5 +200,5 @@
 
 <!--debug-->
 {% if SITE == 'localhost' or SITE == 'devrama.net' %}
-<script defer src="{{'js/halloween/banner-debug.js' | asset}}"></script>
+<script defer src="{{'js/event/banner-debug.js' | asset}}"></script>
 {% endif %}

@@ -104,7 +104,11 @@
 		</div>
 		{% block sidebar %}
 			{% if has_sidebar and (home or p) %}
-				{% include "sidebar_" + SITE_NAME + ".html" %}
+				{% if not EVENT_ACTIVE %}
+					{% include "sidebar_" + SITE_NAME + ".html" %}
+				{% else %}
+					{% include "event/sidebar_" + SITE_NAME + ".html" %}
+				{% endif %}
 			{% endif %}
 		{% endblock %}
 	</div>

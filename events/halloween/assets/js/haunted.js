@@ -1,5 +1,5 @@
-const thunder1 = new Audio(`/assets/media/halloween/haunted/thunder1.mp3`),
-      thunder2 = new Audio(`/assets/media/halloween/haunted/thunder2.mp3`),
+const thunder1 = new Audio(`/assets/media/event/haunted/thunder1.mp3`),
+      thunder2 = new Audio(`/assets/media/event/haunted/thunder2.mp3`),
       stylesheet_haunted = document.createElement("STYLE"),
       is_upsidedown = localStorage.getItem('setting_upsidedown'),
       div = document.getElementById("haunted-effect")

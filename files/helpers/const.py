@@ -521,6 +521,16 @@ COLORS = {'ff66ac','805ad5','62ca56','38a169','80ffff','2a96f3','eb4963','ff0000
 BAN_EVASION_DOMAIN = 'rdrama.life'
 
 AWARDS = {
+	###FALLBACK
+	"fallback": {
+		"kind": "fallback",
+		"title": "",
+		"description": "",
+		"icon": "fas fa-circle",
+		"color": "text-white",
+		"price": 0,
+		"deflectable": False
+	},
 	### Deprecated
 	"ghost": {
 		"kind": "ghost",
@@ -1108,7 +1118,7 @@ if SITE_NAME == 'PCM':
 
 # Disable unused awards, and site-specific award inclusion/exclusion.
 AWARDS_DISABLED = [
-	'ghost', 'nword', 'lootbox', # Generic
+	'fallback', 'ghost', 'nword', 'lootbox', # Generic
 	'snow', 'gingerbread', 'lights', 'candycane', 'fireplace', 'grinch', # Fistmas
 	'haunt', 'upsidedown', 'stab', 'spiders', 'fog', # Homoween '21
 	'jumpscare', 'hw-bite', 'hw-vax', 'hw-grinch', 'flashlight', # Homoween '22
@@ -1175,7 +1185,10 @@ if not FEATURES['PROCOINS']:
 	AWARDS_DISABLED.append('benefactor')
 
 if event:
+	temp = {x: AWARDS[x] for x in AWARDS if x not in event.EVENT_AWARDS}
+	AWARDS.clear()
 	AWARDS.update(event.EVENT_AWARDS)
+	AWARDS.update(temp)
 
 	for award in event.EVENT_AWARDS:
 		if award in AWARDS_DISABLED:

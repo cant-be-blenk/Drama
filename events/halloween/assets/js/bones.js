@@ -47,7 +47,7 @@ function bones(number){
         this.element.style.opacity = 0;
         this.element.style.position = 'absolute';
         this.element.style.height = '3rem';
-        this.element.src = "/assets/images/halloween/skeletons/"+c;
+        this.element.src = "/assets/images/event/skeletons/"+c;
         container.appendChild(this.element);
 
         this.update = function() {

@@ -112,8 +112,3 @@ EVENT_AWARDS = {
 		"price": 200
 	}
 }
-
-EVENT_JINJA_CONST = {
-	"EVENT_BANNER": "banner_rDrama.html",
-	"EVENT_STYLES": "spooky.css"
-}

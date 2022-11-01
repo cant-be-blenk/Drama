@@ -391,7 +391,8 @@ CREATE TABLE public.comments (
     blackjack_result character varying(860),
     treasure_amount character varying(10),
     wordle_result character varying(115),
-    body_ts tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, (body)::text)) STORED
+    body_ts tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, (body)::text)) STORED,
+    casino_game_id integer
 );
 
 
@@ -425,7 +426,8 @@ CREATE TABLE public.commentvotes (
     user_id integer NOT NULL,
     app_id integer,
     "real" boolean DEFAULT true NOT NULL,
-    created_utc integer NOT NULL
+    created_utc integer NOT NULL,
+    coins smallint DEFAULT 1 NOT NULL
 );
 
 
@@ -1007,6 +1009,7 @@ CREATE TABLE public.users (
     total_lottery_winnings integer DEFAULT 0 NOT NULL,
     offsitementions boolean DEFAULT false NOT NULL,
     last_active integer DEFAULT 0 NOT NULL,
+    poorcel boolean DEFAULT false NOT NULL,
     last_viewed_post_notifs integer NOT NULL,
     pronouns character varying(11) NOT NULL,
     last_viewed_log_notifs integer NOT NULL,
@@ -1021,7 +1024,9 @@ CREATE TABLE public.users (
     rainbow integer,
     spider integer,
     homoween_zombie character varying(7) DEFAULT 'HEALTHY'::character varying,
-    jumpscare integer DEFAULT 0 NOT NULL
+    jumpscare integer DEFAULT 0 NOT NULL,
+    hwmusic boolean DEFAULT false NOT NULL,
+    hw_zombie integer DEFAULT 0 NOT NULL
 );
 
 
@@ -1067,7 +1072,8 @@ CREATE TABLE public.votes (
     vote_type integer NOT NULL,
     app_id integer,
     "real" boolean DEFAULT true NOT NULL,
-    created_utc integer NOT NULL
+    created_utc integer NOT NULL,
+    coins smallint DEFAULT 1 NOT NULL
 );
 
 
@@ -2150,6 +2156,14 @@ ALTER TABLE ONLY public.userblocks
 
 
 --
+-- Name: comments casino_game_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT casino_game_fkey FOREIGN KEY (casino_game_id) REFERENCES public.casino_games(id);
+
+
+--
 -- Name: casino_games casino_games_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2680,3 +2694,4 @@ ALTER TABLE ONLY public.comment_option_votes
 --
 -- PostgreSQL database dump complete
 --
+
