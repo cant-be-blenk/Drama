@@ -1,2 +1,2 @@
-from files.helpers.events import loadModule
-routes = loadModule(".routes")
+from events import loadModule
+event_routes = loadModule("routes")

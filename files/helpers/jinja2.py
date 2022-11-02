@@ -6,7 +6,7 @@ from .const import *
 import time
 from files.helpers.assetcache import assetcache_path
 from files.helpers.wrappers import calc_users
-from .events import EVENT_ACTIVE
+from .events import *
 
 @app.template_filter("post_embed")
 def post_embed(id, v):
@@ -56,5 +56,5 @@ def inject_constants():
 			"TRUESCORE_DONATE_LIMIT":TRUESCORE_DONATE_LIMIT, "EVENT_ACTIVE":EVENT_ACTIVE,
 			"BAN_EVASION_DOMAIN":BAN_EVASION_DOMAIN,
 			}
-	if event: constants.update(event.EVENT_JINJA_CONST)
+	if EVENT_ACTIVE: constants.update(event.EVENT_JINJA_CONST)
 	return constants

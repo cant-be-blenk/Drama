@@ -28,3 +28,4 @@ from .transactions import *
 from .streamers import *
 from .sub_logs import *
 from .media import *
+from .events import *
