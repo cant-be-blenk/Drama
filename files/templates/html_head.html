@@ -35,7 +35,7 @@
 {% endmacro %}
 
 {% macro cf_2fa_verify() %}
-	{% if SITE == 'rdrama.net' %}
+	{% if SITE.startswith('rdrama.') %}
 		<meta name="cf-2fa-verify" content="4f40ca1ca249313">
 	{% elif SITE == 'watchpeopledie.tv' %}
 		<meta name="cf-2fa-verify" content="372aba5b9338e00">
@@ -113,10 +113,6 @@
 		{{default_theme()}}
 	{% endif %}
 	<link rel="stylesheet" href="{{'css/awards.css' | asset}}">
-
-	{% if request.path.endswith('/catalog') %}
-		<link rel="stylesheet" href="{{'css/catalog.css' | asset}}">
-	{% endif %}
 
 	{% if sub and sub.css and not request.path.endswith('settings') and not request.values.get('nocss') %}
 		<link rel="stylesheet" href="/h/{{sub}}/css" type="text/css">

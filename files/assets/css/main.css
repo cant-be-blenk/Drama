@@ -1086,6 +1086,7 @@ input[type=submit].btn-follow, input[type=reset].btn-follow, input[type=button].
 	margin-bottom: 0;
 	list-style: none;
 }
+
 nav
 {
 
@@ -3275,13 +3276,6 @@ small, .small {
 	display: block;
 }
 
-.catalog .voting .arrow-up,
-.catalog .voting .arrow-down
-{
-	display: inline-block;
-}
-
-
 .box-shadow-bottom {
 	box-shadow: inset 0 -0.1px 0 var(--gray-400);
 }
@@ -3600,7 +3594,6 @@ small, .small {
 .post-actions .fa, .post-actions .fas, .post-actions .far {
 	font-size: 12px;
 	margin-right: 0.5rem;
-	margin-left: 0.5rem;
 	width: 1rem;
 }
 .post-actions .voting .fa, .post-actions .voting .fas, .post-actions .voting .far {
@@ -3626,7 +3619,8 @@ small, .small {
 	margin-bottom: 0;
 }
 .post-actions .list-inline .list-inline-item {
-	margin-right: 1rem;
+	margin-right: 0.75rem;
+	margin-left: 0rem;
 }
 .post-actions .list-inline .list-inline-item:last-child {
 	margin-right: 0;
@@ -3645,7 +3639,7 @@ small, .small {
 	color: var(--muted);
 	font-weight: 600;
 	font-size: 12px;
-	z-index: 3;
+	z-index: 1000;
 }
 .dropdown-actions .fa, .dropdown-actions .fas, .dropdown-actions .far {
 	font-size: 12px;
@@ -3724,6 +3718,8 @@ small, .small {
 	font-size: 12px;
 	text-decoration: none;
 	text-transform: none;
+	padding-left: 0.25rem;
+	padding-right: 0.25rem;
 }
 .post-actions a:hover, .post-actions button:hover {
 	color: var(--black);
@@ -5934,7 +5930,7 @@ g {
 .fa-lock:before{content:"\f023"}
 .fa-lock-alt:before{content:"\f30d"}
 .fa-search:before{content:"\f002"}
-.fa-memory:before{content:"\f538"}
+.fa-cloudflare:before{content:"\e07d"}
 .fa-comment-alt-smile:before{content:"\f4aa"}
 .fa-microphone-stand:before{content:"\f8cb"}
 .fa-palette:before{content:"\f53f"}
@@ -6040,6 +6036,7 @@ g {
 .fa-syringe:before{content:"\f48e"}
 .fa-spider-web:before{content:"\f719"}
 .fa-coffin-cross:before{content:"\e051"}
+.fa-face-sleeping:before{content:"\e38d"}
 
 
 .pronouns {
@@ -6296,7 +6293,7 @@ div.markdown {
 }
 
 .popover-bio-div {
-	max-height: 50vh !important;
+	max-height: 20vh !important;
 	overflow: auto;
 	scrollbar-width: none;
 	-ms-overflow-style: none;
@@ -6332,4 +6329,13 @@ div.markdown {
 }
 .actionbtns > form > * {
 	margin-bottom: 10px !important;
+}
+#desktop-expanded-image {
+	max-height:90vh;
+	border:5px white solid;
+	-o-object-fit: contain;
+	object-fit: contain;
+}
+.fas.fa-ellipsis-h {
+	margin-right: 0.15rem !important;
 }

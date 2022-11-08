@@ -128,11 +128,6 @@ function buy(mb) {
 	url = `/buy/${kind}`
 	if (mb) url += "?mb=true"
 	const xhr = createXhrWithFormKey(url);
-	if(typeof data === 'object' && data !== null) {
-		for(let k of Object.keys(data)) {
-				form.append(k, data[k]);
-		}
-	}
 	xhr[0].onload = function() {
 		let data
 		try {data = JSON.parse(xhr[0].response)}
@@ -153,19 +148,17 @@ function buy(mb) {
 
 function giveaward(t) {
 	const kind = document.getElementById('kind').value;
-	postToast_callback(t.dataset.action,
+	postToast(t, t.dataset.action,
 		{
 		"kind": kind,
 		"note": document.getElementById('note').value
 		},
-		(xhr) => {
-			if(xhr.status == 200) {
-				let owned = document.getElementById(`${kind}-owned`)
-				let ownednum = Number(owned.textContent) - 1;
-				owned.textContent = ownednum
-				if (ownednum == 0)
-					document.getElementById('giveaward').disabled=true;
-			}
+		() => {
+			let owned = document.getElementById(`${kind}-owned`)
+			let ownednum = Number(owned.textContent) - 1;
+			owned.textContent = ownednum
+			if (ownednum == 0)
+				document.getElementById('giveaward').disabled=true;
 		}	
 	);
 }

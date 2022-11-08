@@ -34,7 +34,8 @@ def upvoters_downvoters(v, username, uid, cls, vote_cls, vote_dir, template, sta
 	except:
 		abort(404)
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
 
 	listing = g.db.query(cls).join(vote_cls).filter(cls.ghost == False, cls.is_banned == False, cls.deleted_utc == 0, vote_cls.vote_type==vote_dir, cls.author_id==id, vote_cls.user_id==uid).order_by(cls.created_utc.desc()).offset(PAGE_SIZE * (page - 1)).limit(PAGE_SIZE + 1).all()
 
@@ -84,7 +85,8 @@ def upvoting_downvoting(v, username, uid, cls, vote_cls, vote_dir, template, sta
 	except:
 		abort(404)
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
 
 	listing = g.db.query(cls).join(vote_cls).filter(cls.ghost == False, cls.is_banned == False, cls.deleted_utc == 0, vote_cls.vote_type==vote_dir, vote_cls.user_id==id, cls.author_id==uid).order_by(cls.created_utc.desc()).offset(PAGE_SIZE * (page - 1)).limit(PAGE_SIZE + 1).all()
 
@@ -129,7 +131,8 @@ def user_voted(v, username, cls, vote_cls, vote_dir, template, standalone):
 	if not u.is_visible_to(v): abort(403)
 	if not (v.id == u.id or v.admin_level >= PERMS['USER_VOTERS_VISIBLE']): abort(403)
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
 
 	listing = g.db.query(cls).join(vote_cls).filter(
 			cls.ghost == False,
@@ -167,13 +170,19 @@ def user_upvoted_comments(v, username):
 @app.get("/grassed")
 @auth_required
 def grassed(v):
-	users = g.db.query(User).filter(User.ban_reason.like('grass award used by @%')).all()
+	users = g.db.query(User).filter(User.ban_reason.like('grass award used by @%'))
+	if not v.can_see_shadowbanned:
+		users = users.filter(User.shadowbanned == None)
+	users = users.all()
 	return render_template("grassed.html", v=v, users=users)
 
 @app.get("/chuds")
 @auth_required
 def chuds(v):
-	users = g.db.query(User).filter(User.agendaposter > 0).order_by(User.username).all()
+	users = g.db.query(User).filter(User.agendaposter > 0)
+	if not v.can_see_shadowbanned:
+		users = users.filter(User.shadowbanned == None)
+	users = users.order_by(User.username).all()
 	return render_template("chuds.html", v=v, users=users)
 
 def all_upvoters_downvoters(v, username, vote_dir, is_who_simps_hates):
@@ -321,6 +330,8 @@ def transfer_bux(v, username):
 @auth_required
 def leaderboard(v):
 	users = g.db.query(User)
+	if not v.can_see_shadowbanned:
+		users = users.filter(User.shadowbanned == None)
 
 	coins = Leaderboard("Coins", "coins", "coins", "Coins", None, Leaderboard.get_simple_lb, User.coins, v, lambda u:u.coins, g.db, users)
 	subscribers = Leaderboard("Followers", "followers", "followers", "Followers", None, Leaderboard.get_simple_lb, User.stored_subscriber_count, v, lambda u:u.stored_subscriber_count, g.db, users)
@@ -328,7 +339,7 @@ def leaderboard(v):
 	comments = Leaderboard("Comments", "comment count", "comments", "Comments", "comments", Leaderboard.get_simple_lb, User.comment_count, v, lambda u:u.comment_count, g.db, users)
 	received_awards = Leaderboard("Awards", "received awards", "awards", "Awards", None, Leaderboard.get_simple_lb, User.received_award_count, v, lambda u:u.received_award_count, g.db, users)
 	coins_spent = Leaderboard("Spent in shop", "coins spent in shop", "spent", "Coins", None, Leaderboard.get_simple_lb, User.coins_spent, v, lambda u:u.coins_spent, g.db, users)
-	truecoins = Leaderboard("Truescore", "truescore", "truescore", "Truescore", None, Leaderboard.get_simple_lb, User.truecoins, v, lambda u:u.truecoins, g.db, users)
+	truescore = Leaderboard("Truescore", "truescore", "truescore", "Truescore", None, Leaderboard.get_simple_lb, User.truescore, v, lambda u:u.truescore, g.db, users)
 
 	badges = Leaderboard("Badges", "badges", "badges", "Badges", None, Leaderboard.get_badge_marsey_lb, Badge.user_id, v, None, g.db, None)
 	marseys = Leaderboard("Marseys", "Marseys made", "marseys", "Marseys", None, Leaderboard.get_badge_marsey_lb, Marsey.author_id, v, None, g.db, None) if SITE_NAME == 'rDrama' else None
@@ -338,7 +349,7 @@ def leaderboard(v):
 	owned_hats = Leaderboard("Owned hats", "owned hats", "owned-hats", "Owned Hats", None, Leaderboard.get_hat_lb, User.owned_hats, v, None, g.db, None)
 	designed_hats = Leaderboard("Designed hats", "designed hats", "designed-hats", "Designed Hats", None, Leaderboard.get_hat_lb, User.designed_hats, v, None, g.db, None)	
 
-	leaderboards = [coins, coins_spent, truecoins, subscribers, posts, comments, received_awards, badges, marseys, blocks, owned_hats, designed_hats]
+	leaderboards = [coins, coins_spent, truescore, subscribers, posts, comments, received_awards, badges, marseys, blocks, owned_hats, designed_hats]
 
 	return render_template("leaderboard.html", v=v, leaderboards=leaderboards)
 
@@ -422,7 +433,7 @@ def message2(v, username):
 
 	body_html = sanitize(message)
 
-	if not (SITE == 'rdrama.net' and user.id == BLACKJACKBTZ_ID):
+	if not (SITE.startswith('rdrama.') and user.id == BLACKJACKBTZ_ID):
 		existing = g.db.query(Comment.id).filter(Comment.author_id == v.id,
 																Comment.sentto == user.id,
 																Comment.body_html == body_html,
@@ -487,6 +498,14 @@ def messagereply(v):
 
 	if parent.sentto == 2: user_id = None
 	elif v.id == user_id: user_id = parent.sentto
+
+	if user_id:
+		user = get_account(user_id, v=v, include_blocks=True)
+		if hasattr(user, 'is_blocking') and user.is_blocking:
+			abort(403, "You're blocking this user.")
+		elif (v.admin_level <= PERMS['MESSAGE_BLOCKED_USERS']
+				and hasattr(user, 'is_blocked') and user.is_blocked):
+			abort(403, "You're blocked by this user.")
 
 	if parent.sentto == 2:
 		body += process_files()
@@ -650,7 +669,7 @@ def visitors(v):
 @app.get("/logged_out/@<username>")
 @auth_desired_with_logingate
 def u_username(username, v=None):
-	u = get_user(username, v=v, include_blocks=True, include_shadowbanned=False, rendered=True)
+	u = get_user(username, v=v, include_blocks=True, include_shadowbanned=False)
 	if username != u.username:
 		return redirect(SITE_FULL + request.full_path.replace(username, u.username))
 	is_following = v and u.has_follower(v)
@@ -669,7 +688,7 @@ def u_username(username, v=None):
 	if not u.is_visible_to(v):
 		if g.is_api_or_xhr or request.path.endswith(".json"):
 			abort(403, "This userpage is private")
-		return render_template("userpage_private.html", u=u, v=v), 403
+		return render_template("userpage_private.html", u=u, v=v, is_following=is_following), 403
 
 	
 	if v and hasattr(u, 'is_blocking') and u.is_blocking:
@@ -688,7 +707,7 @@ def u_username(username, v=None):
 	next_exists = (len(ids) > PAGE_SIZE)
 	ids = ids[:PAGE_SIZE]
 
-	if page == 1:
+	if page == 1 and sort == 'new':
 		sticky = []
 		sticky = g.db.query(Submission).filter_by(is_pinned=True, author_id=u.id, is_banned=False).all()
 		if sticky:
@@ -731,7 +750,7 @@ def u_username(username, v=None):
 @app.get("/logged_out/@<username>/comments")
 @auth_desired_with_logingate
 def u_username_comments(username, v=None):
-	u = get_user(username, v=v, include_blocks=True, include_shadowbanned=False, rendered=True)
+	u = get_user(username, v=v, include_blocks=True, include_shadowbanned=False)
 	if username != u.username:
 		return redirect(f"/@{u.username}/comments")
 	is_following = v and u.has_follower(v)
@@ -739,7 +758,7 @@ def u_username_comments(username, v=None):
 	if not u.is_visible_to(v):
 		if g.is_api_or_xhr or request.path.endswith(".json"):
 			abort(403, "This userpage is private")
-		return render_template("userpage_private.html", u=u, v=v), 403
+		return render_template("userpage_private.html", u=u, v=v, is_following=is_following), 403
 
 	if v and hasattr(u, 'is_blocking') and u.is_blocking:
 		if g.is_api_or_xhr or request.path.endswith(".json"):
@@ -919,11 +938,11 @@ def user_profile_name(username):
 
 def get_saves_and_subscribes(v, template, relationship_cls, page:int, standalone=False):
 	PAGE_SIZE = 25
-	if relationship_cls in (SaveRelationship, Subscription):
+	if relationship_cls in [SaveRelationship, Subscription]:
 		query = relationship_cls.submission_id
 		join = relationship_cls.post
 		cls = Submission
-	elif relationship_cls in (CommentSaveRelationship):
+	elif relationship_cls is CommentSaveRelationship:
 		query = relationship_cls.comment_id
 		join = relationship_cls.comment
 		cls = Comment
@@ -944,19 +963,25 @@ def get_saves_and_subscribes(v, template, relationship_cls, page:int, standalone
 @app.get("/@<username>/saved/posts")
 @auth_required
 def saved_posts(v, username):
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
+
 	return get_saves_and_subscribes(v, "userpage.html", SaveRelationship, page, False)
 
 @app.get("/@<username>/saved/comments")
 @auth_required
 def saved_comments(v, username):
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
+
 	return get_saves_and_subscribes(v, "userpage_comments.html", CommentSaveRelationship, page, True)
 
 @app.get("/@<username>/subscribed/posts")
 @auth_required
 def subscribed_posts(v, username):
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
+
 	return get_saves_and_subscribes(v, "userpage.html", Subscription, page, False)
 
 @app.post("/fp/<fp>")
@@ -989,6 +1014,16 @@ def toggle_pins(sort):
 
 	pins = session.get(sort, default)
 	session[sort] = not pins
+
+	if is_site_url(request.referrer):
+		return redirect(request.referrer)
+	return redirect('/')
+
+
+@app.get("/toggle_holes")
+def toggle_holes():
+	holes = session.get('holes', True)
+	session["holes"] = not holes
 
 	if is_site_url(request.referrer):
 		return redirect(request.referrer)

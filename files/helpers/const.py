@@ -88,15 +88,16 @@ AJ_REPLACEMENTS = {
 
 SLURS = {
 	"nigger": "BIPOC",
-	"niglet": "BIPOClet",
+	"niglet": 'BIPOClet',
 	"negress": "BIPOC woman",
+	'nigga': 'neighbor',
 	"faggot": "cute twink",
 	"fag": "strag",
 	"spic ": "hard-working American ",
+	"spics": "hard-working Americans",
 	"trannie": '<img loading="lazy" data-bs-toggle="tooltip" alt=":marseytrain:" title=":marseytrain:" src="/e/marseytrain.webp">',
 	"tranny": '<img loading="lazy" data-bs-toggle="tooltip" alt=":marseytrain:" title=":marseytrain:" src="/e/marseytrain.webp">',
 	"troon": '<img loading="lazy" data-bs-toggle="tooltip" alt=":marseytrain:" title=":marseytrain:" src="/e/marseytrain.webp">',
-	"dyke": "cute lesbian",
 	"kike": "jewish chad",
 	"daisy's destruction": "Cars 2",
 	"daisys destruction": "Cars 2",
@@ -109,7 +110,10 @@ if SITE_NAME == 'rDrama':
 		"retard": "r-slur",
 		"pedophile": "libertarian",
 		"kill yourself": "keep yourself safe",
-		"steve akins": "penny verity oaken",
+		"kill yourselves": "keep yourselves safe",
+		"steve akins": "Dr. Penelope Verity Oaken",
+		"steve joel akins": "Dr. Penelope Verity Oaken",
+		"steven joel akins": "Dr. Penelope Verity Oaken",
 		"latinos": "latinx",
 		"latino": "latinx",
 		"latinas": "latinx",
@@ -131,10 +135,36 @@ if SITE_NAME == 'rDrama':
 		" pedo ": " libertarian ",
 		" kys": " keep yourself safe",
 		"kys ": "keep yourself safe ",
+		"republican": 'republiKKKan',
+		"america": 'ameriKKKa',
 	}
 	SLURS.update(RDRAMA_SLURS)
 
-single_words = "|".join([slur.lower() for slur in SLURS.keys()])
+PROFANITIES = {
+	'motherfucker': 'motherlover',
+	'fuck': 'frick',
+	'shitting': 'pooping',
+	'lmao': 'lmbo',
+	'damn': 'darn',
+	'bastard': 'fatherless child',
+	'bitch': 'b-word',
+	'toilet': 'potty',
+	' asshole': ' butthole',
+	' rape ': ' r*pe ',
+	' hell ': ' heck ',
+	' sex ': ' intercourse ',
+	' cum ': ' c*m ',
+	'orgasm': 'sexual climax',
+	'dick': 'peepee',
+	'cock': 'peepee',
+	'penis': 'peepee',
+	'pussy': 'girl peepee',
+	'vagina': 'girl peepee',
+	' twat': ' girl peepee',
+}
+
+slur_single_words = "|".join([slur.lower() for slur in SLURS.keys()])
+profanity_single_words = "|".join([profanity.lower() for profanity in PROFANITIES.keys()])
 
 LONGPOST_REPLIES = ('Wow, you must be a JP fan.', 'This is one of the worst posts I have EVER seen. Delete it.', "No, don't reply like this, please do another wall of unhinged rant please.", '<h1>😴😴😴</h1>', "Ma'am we've been over this before. You need to stop.", "I've known more coherent downies.", "Your pulitzer's in the mail", "That's great and all, but I asked for my burger without cheese.", 'That degree finally paying off', "That's nice sweaty. Why don't you have a seat in the time out corner with Pizzashill until you calm down, then you can have your Capri Sun.", "All them words won't bring your pa back.", "You had a chance to not be completely worthless, but it looks like you threw it away. At least you're consistent.", 'Some people are able to display their intelligence by going on at length on a subject and never actually saying anything. This ability is most common in trades such as politics, public relations, and law. You have impressed me by being able to best them all, while still coming off as an absolute idiot.', "You can type 10,000 characters and you decided that these were the one's that you wanted.", 'Have you owned the libs yet?', "I don't know what you said, because I've seen another human naked.", 'Impressive. Normally people with such severe developmental disabilities struggle to write much more than a sentence or two. He really has exceded our expectations for the writing portion. Sadly the coherency of his writing, along with his abilities in the social skills and reading portions, are far behind his peers with similar disabilities.', "This is a really long way of saying you don't fuck.", "Sorry ma'am, looks like his delusions have gotten worse. We'll have to admit him.", 'If only you could put that energy into your relationships', 'Posts like this is why I do Heroine.', 'still unemployed then?', 'K', 'look im gunna have 2 ask u 2 keep ur giant dumps in the toilet not in my replys 😷😷😷', "Mommy is soooo proud of you, sweaty. Let's put this sperg out up on the fridge with all your other failures.", "Good job bobby, here's a star", "That was a mistake. You're about to find out the hard way why.", f'You sat down and wrote all this shit. You could have done so many other things with your life. What happened to your life that made you decide writing novels of bullshit here was the best option?', "I don't have enough spoons to read this shit", "All those words won't bring daddy back.", 'OUT!', "Damn, you're really mad over this, but thanks for the effort you put into typing that all out! Sadly I won't read it all.", "Jesse what the fuck are you talking about??", "▼you're fucking bananas if you think I'm reading all that, take my downvote and shut up idiot", "Are you feeling okay bud?", '<img loading="lazy" data-bs-toggle="tooltip" alt=":#marseywoah:" src="/e/marseywoah.webp" b title=":#marseywoah:">', 'At no point in your rambling, incoherent post were you even close to anything that could be considered a rational thought. Everyone on this site is now dumber for having read it. May God have mercy on your soul.')
 
@@ -153,6 +183,12 @@ DISCORD_CHANGELOG_CHANNEL_ID = 1034632681788538980
 WPD_CHANNEL_ID = 1013990963846332456
 PIN_AWARD_TEXT = " (pin award)"
 
+THEMES = ["4chan","classic","classic_dark","coffee","dark","dramblr","light","midnight","transparent","tron","win98"]
+COMMENT_SORTS = ["hot", "new", "old", "top", "bottom", "controversial"]
+SORTS = COMMENT_SORTS + ["bump", "comments"]
+TIME_FILTERS = ["hour", "day", "week", "month", "year", "all"]
+PAGE_SIZES = {10, 25, 50, 100}
+
 ################################################################################
 ### SITE SPECIFIC CONSTANTS
 ################################################################################
@@ -166,7 +202,6 @@ PERMS = { # Minimum admin_level to perform action.
 	'ADMIN_HOME_VISIBLE': 2,
 	'DOMAINS_BAN': 3,
 	'HOLE_CREATE': 0,
-	'HOLE_GLOBAL_MODERATION': 4,
 	'FLAGS_REMOVE': 2,
 	'VOTES_VISIBLE': 0,
 	'USER_BLOCKS_VISIBLE': 0,
@@ -191,7 +226,7 @@ PERMS = { # Minimum admin_level to perform action.
 	'POST_TO_POLL_THREAD': 2,
 	'POST_BETS': 3,
 	'POST_BETS_DISTRIBUTE': 3, # probably should be the same as POST_BETS but w/e
-	'BYPASS_PIN_LIMIT': 2,
+	'BYPASS_PIN_LIMIT_IF_TEMPORARY': 2,
 	'VIEW_PENDING_SUBMITTED_MARSEYS': 3,
 	'VIEW_PENDING_SUBMITTED_HATS': 3,
 	'MODERATE_PENDING_SUBMITTED_MARSEYS': 3, # note: there is an extra check so that only """carp""" can approve them
@@ -251,6 +286,7 @@ FEATURES = {
 	'USERS_PROFILE_BANNER': True,
 	'USERS_PROFILE_BODYTEXT': True,
 	'USERS_PROFILE_SONG': True,
+	'USERS_PERMANENT_WORD_FILTERS': False,
 	'USERS_SUICIDE': True,
 	'MARKUP_COMMANDS': True,
 	'REPOST_DETECTION': True,
@@ -275,33 +311,33 @@ WERKZEUG_ERROR_DESCRIPTIONS = {
 }
 
 ERROR_TITLES = {
-	400: "Bad Request",
-	401: "Unauthorized",
-	403: "Forbidden",
-	404: "Not Found",
-	405: "Method Not Allowed",
-	406: "Too Many Pings",
-	409: "Conflict",
-	413: "Payload Too Large",
-	415: "Unsupported Media Type",
+	400: "Naughty Request",
+	401: "🚫 Unauthorized 🚫",
+	403: "Forbidden🙅‍♀️",
+	404: "Not Found - where did it go?",
+	405: "Method Not Allowed, BAD.",
+	406: "Too Many Pings fuck off",
+	409: "Cumflict",
+	413: "Gayload Too Large",
+	415: "Weird Media Type",
 	418: "I'm a teapot",
 	429: "Too Many Requests",
-	500: "Internal Server Error",
+	500: "Balls-Deep Server Error",
 }
 
 ERROR_MSGS = {
 	400: "That request was bad and you should feel bad.",
-	401: "What you're trying to do requires an account. I think. The original error message said something about a castle and I hated that.",
+	401: "What you're trying to do requires an account. I think. The original error message said something about a castle and I hated that. If you see this error and you're logged into an account, something went pretty wrong somewhere.",
 	403: "YOU AREN'T WELCOME HERE GO AWAY",
 	404: "Someone typed something wrong and it was probably you, please do better.",
 	405: "idk how anyone gets this error but if you see this, remember to follow @carpathianflorist<br>the original error text here talked about internet gremlins and wtf",
-	406: "Max limit is 5 for comments and 50 for posts",
+	406: "Max limit is 5 for comments and 50 for posts (what is it referring to? what does it mean? no one knows)",
 	409: "There's a conflict between what you're trying to do and what you or someone else has done and because of that you can't do what you're trying to do. So maybe like... don't try and do that? Sorry not sorry",
-	413: "That's a heckin' chonker of a file! Please make it smaller or maybe like upload it somewhere else idk",
+	413: "That's a heckin' chonker of a file! Please make it smaller or maybe like upload it somewhere else idk<BR>jc wrote this one hi jc!<br>- carp",
 	415: "Please upload only Image, Video, or Audio files!",
 	418: "this really shouldn't happen now that we autoconvert webm files but if it does there's a cool teapot marsey so there's that",
 	429: "go spam somewhere else nerd",
-	500: "Hiiiii it's carp! I think this error means that there's a timeout error. And I think that means something took too long to load so it decided not to work at all. If you keep seeing this on the same page <I>but not other pages</I>, then something is probably wrong with that specific function. It may not be called a function, but that sounds right to me. Anyway, ping me and I'll whine to someone smarter to fix it. Don't bother them. Thanks ily &lt;3",
+	500: "Hiiiii it's carp! I think this error means that there's a timeout error. And I think that means something took too long to load so it decided not to work at all. If you keep seeing this on the same page <I>but not other pages</I>, then something is probably wrong with that specific function. It may not be called a function, but that sounds right to me. Anyway, <s>ping me and I'll whine to someone smarter to fix it. Don't bother them.</s> <B>After a year and a half of infuriating pings, the new instructions are to quit whining and just wait until it works again oh my god shut UP.</B><BR><BR> Thanks ily &lt;3",
 }
 
 ERROR_MARSEYS = {
@@ -333,8 +369,9 @@ COMMENT_BODY_HTML_LENGTH_LIMIT = 20000 # do not make larger than 20000 character
 COMMENT_MAX_DEPTH = 200
 TRANSFER_MESSAGE_LENGTH_LIMIT = 200 # do not make larger than 10000 characters (comment limit) without altering the table
 MIN_REPOST_CHECK_URL_LENGTH = 9 # also change the constant in checkRepost() of submit.js
-ADMIN_PING_TRUESCORE_MINIMUM = 500
 TRUESCORE_DONATE_LIMIT = 100
+COSMETIC_AWARD_COIN_AWARD_PCT = 0.10
+
 
 LOGGEDIN_ACTIVE_TIME = 15 * 60
 PFP_DEFAULT_MARSEY = True
@@ -352,7 +389,7 @@ SNAPPY_ID = 2
 LONGPOSTBOT_ID = 3
 ZOZBOT_ID = 4
 BASEDBOT_ID = 0
-BBBB_ID = 0
+PRIVILEGED_USER_BOTS = ()
 
 SCHIZO_ID = 0
 KIPPY_ID = 0
@@ -397,15 +434,32 @@ MAX_IMAGE_AUDIO_SIZE_MB = 8
 MAX_IMAGE_AUDIO_SIZE_MB_PATRON = 16
 MAX_VIDEO_SIZE_MB = 32
 MAX_VIDEO_SIZE_MB_PATRON = 64
+MAX_IMAGE_CONVERSION_TIMEOUT = 15 # seconds
 
 ANTISPAM_BYPASS_IDS = ()
 
 PAGE_SIZE = 25
 LEADERBOARD_LIMIT = PAGE_SIZE
 
-if SITE == 'rdrama.net':
+HOUSE_JOIN_COST = 500
+HOUSE_SWITCH_COST = 2000
+
+DONATE_SERVICE = "Gumroad" if not KOFI_TOKEN or  KOFI_TOKEN == 'blahblahblah' else "KoFi"
+DONATE_LINK = GUMROAD_LINK if not KOFI_TOKEN or KOFI_TOKEN == 'blahblahblah' else KOFI_LINK
+
+TIERS_ID_TO_NAME = {
+		1: "Paypig",
+		2: "Renthog",
+		3: "Landchad",
+		4: "Terminally online turboautist",
+		5: "JIDF Bankroller",
+		6: "Rich Bich"
+}
+
+if SITE.startswith('rdrama.'):
 	FEATURES['PRONOUNS'] = True
 	FEATURES['HOUSES'] = True
+	FEATURES['USERS_PERMANENT_WORD_FILTERS'] = True
 	PERMS['ADMIN_ADD'] = 4
 
 	SIDEBAR_THREAD = 37696
@@ -421,7 +475,7 @@ if SITE == 'rdrama.net':
 	SNAPPY_ID = 261
 	LONGPOSTBOT_ID = 1832
 	ZOZBOT_ID = 1833
-	BBBB_ID = 12125
+	PRIVILEGED_USER_BOTS = (12125, 16049)
 
 	SCHIZO_ID = 8494
 	KIPPY_ID = 7150
@@ -490,6 +544,18 @@ elif SITE == 'watchpeopledie.tv':
 	PERMS['HOLE_CREATE'] = 2
 	PERMS['POST_EDITING'] = 2
 	PERMS['ADMIN_ADD'] = 4
+	
+	ERROR_TITLES[400] = "Bad Request"
+	ERROR_TITLES[401] = "Unauthorized"
+	ERROR_TITLES[403] = "Forbidden"
+	ERROR_TITLES[404] = "Not Found"
+	ERROR_TITLES[405] = "Method Not Allowed"
+	ERROR_TITLES[406] = "Too Many Pings"
+	ERROR_TITLES[409] = "Conflict"
+	ERROR_TITLES[415] = "Unsupported Media Type"
+	ERROR_TITLES[500] = "Internal Server Error"
+
+	POLL_THREAD = 13225
 
 	SIDEBAR_THREAD = 5403
 	BANNER_THREAD = 9869
@@ -510,9 +576,21 @@ elif SITE == 'watchpeopledie.tv':
 	GIFT_NOTIF_ID = CARP_ID
 	SIGNUP_FOLLOW_ID = CARP_ID
 
+	TIERS_ID_TO_NAME = {
+		1: "Victim",
+		2: "Corpse",
+		3: "Zombie",
+		4: "Ghost",
+		5: "Survivor",
+		6: "Jigsaw"
+	}
+
 else: # localhost or testing environment implied
 	FEATURES['PRONOUNS'] = True
 	FEATURES['HOUSES'] = True
+	FEATURES['USERS_PERMANENT_WORD_FILTERS'] = True
+
+HOUSES = ("None","Furry","Femboy","Vampire","Racist") if FEATURES['HOUSES'] else ("None")
 
 bots = {AUTOJANNY_ID, SNAPPY_ID, LONGPOSTBOT_ID, ZOZBOT_ID, BASEDBOT_ID}
 
@@ -539,7 +617,8 @@ AWARDS = {
 		"icon": "fas fa-ghost",
 		"color": "text-white",
 		"price": 3000,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": False
 	},
 	"nword": {
 		"kind": "nword",
@@ -548,7 +627,8 @@ AWARDS = {
 		"icon": "fas fa-edit",
 		"color": "text-success",
 		"price": 10000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	### Fistmas 2021
 	"snow": {
@@ -558,7 +638,8 @@ AWARDS = {
 		"icon": "fas fa-snowflake",
 		"color": "text-blue-200",
 		"price": 300,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"gingerbread": {
 		"kind": "gingerbread",
@@ -567,7 +648,8 @@ AWARDS = {
 		"icon": "fas fa-gingerbread-man",
 		"color": "",
 		"price": 300,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"lights": {
 		"kind": "lights",
@@ -576,7 +658,8 @@ AWARDS = {
 		"icon": "fas fa-lights-holiday",
 		"color": "",
 		"price": 300,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"candycane": {
 		"kind": "candycane",
@@ -585,7 +668,8 @@ AWARDS = {
 		"icon": "fas fa-candy-cane",
 		"color": "",
 		"price": 400,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"fireplace": {
 		"kind": "fireplace",
@@ -594,7 +678,8 @@ AWARDS = {
 		"icon": "fas fa-fireplace",
 		"color": "",
 		"price": 600,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"grinch": {
 		"kind": "grinch",
@@ -603,7 +688,8 @@ AWARDS = {
 		"icon": "fas fa-angry",
 		"color": "text-green-500",
 		"price": 1000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	### Homoween 2021 & 2022
 	"haunt": {
@@ -613,7 +699,8 @@ AWARDS = {
 		"icon": "fas fa-book-dead",
 		"color": "text-warning",
 		"price": 500,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"upsidedown": {
 		"kind": "upsidedown",
@@ -622,7 +709,8 @@ AWARDS = {
 		"icon": "fas fa-lights-holiday",
 		"color": "",
 		"price": 400,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"stab": {
 		"kind": "stab",
@@ -631,7 +719,8 @@ AWARDS = {
 		"icon": "fas fa-knife-kitchen",
 		"color": "text-danger",
 		"price": 300,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"spiders": {
 		"kind": "spiders",
@@ -640,7 +729,8 @@ AWARDS = {
 		"icon": "fas fa-spider",
 		"color": "text-black",
 		"price": 200,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"fog": {
 		"kind": "fog",
@@ -649,7 +739,8 @@ AWARDS = {
 		"icon": "fas fa-smoke",
 		"color": "text-gray",
 		"price": 200,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	### Homoween 2022
 	"jumpscare": {
@@ -659,7 +750,8 @@ AWARDS = {
 		"icon": "fas fa-coffin-cross",
 		"color": "text-purple",
 		"price": 600,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"hw-bite": {
 		"kind": "hw-bite",
@@ -668,7 +760,8 @@ AWARDS = {
 		"icon": "fas fa-biohazard",
 		"color": "text-danger",
 		"price": 500,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"hw-vax": {
 		"kind": "hw-vax",
@@ -677,7 +770,8 @@ AWARDS = {
 		"icon": "fas fa-syringe",
 		"color": "text-blue",
 		"price": 500,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"hw-grinch": {
 		"kind": "hw-grinch",
@@ -686,8 +780,8 @@ AWARDS = {
 		"icon": "fas fa-angry",
 		"color": "text-orange",
 		"price": 1000,
-		"deflectable": True
-
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"flashlight": {
 		"kind": "flashlight",
@@ -696,7 +790,8 @@ AWARDS = {
 		"icon": "fas fa-flashlight",
 		"color": "text-black",
 		"price": 400,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"candy-corn": {
 		"kind": "candy-corn",
@@ -705,7 +800,8 @@ AWARDS = {
 		"icon": "fas fa-candy-corn",
 		"color": "text-orange",
 		"price": 400,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"ectoplasm": {
 		"kind": "ectoplasm",
@@ -714,7 +810,8 @@ AWARDS = {
 		"icon": "fas fa-ghost",
 		"color": "text-success",
 		"price": 400,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"bones": {
 		"kind": "bones",
@@ -723,7 +820,8 @@ AWARDS = {
 		"icon": "fas fa-bone",
 		"color": "text-white",
 		"price": 200,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"pumpkin": {
 		"kind": "pumpkin",
@@ -732,17 +830,19 @@ AWARDS = {
 		"icon": "fas fa-jack-o-lantern",
 		"color": "text-orange",
 		"price": 200,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	### Standard
 	"marsify": {
 		"kind": "marsify",
 		"title": "Marsify",
-		"description": "Marsifies the recipient's comments for 6 hours.",
+		"description": "Marsifies the recipient's comments for 24 hours.",
 		"icon": "fas fa-cat",
 		"color": "text-white",
 		"price": 150,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"shit": {
 		"kind": "shit",
@@ -751,7 +851,8 @@ AWARDS = {
 		"icon": "fas fa-poop",
 		"color": "text-black-50",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"fireflies": {
 		"kind": "fireflies",
@@ -760,7 +861,8 @@ AWARDS = {
 		"icon": "fas fa-sparkles",
 		"color": "text-warning",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"train": {
 		"kind": "train",
@@ -769,7 +871,8 @@ AWARDS = {
 		"icon": "fas fa-train",
 		"color": "text-pink",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"scooter": {
 		"kind": "scooter",
@@ -778,7 +881,8 @@ AWARDS = {
 		"icon": "fas fa-flag-usa",
 		"color": "text-muted",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"wholesome": {
 		"kind": "wholesome",
@@ -787,7 +891,8 @@ AWARDS = {
 		"icon": "fas fa-smile-beam",
 		"color": "text-yellow",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"firework": {
 		"kind": "firework",
@@ -796,7 +901,8 @@ AWARDS = {
 		"icon": "fas fa-bahai",
 		"color": "text-danger",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"confetti": {
 		"kind": "confetti",
@@ -805,7 +911,8 @@ AWARDS = {
 		"icon": "fas fa-party-horn",
 		"color": "text-yellow",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"ricardo": {
 		"kind": "ricardo",
@@ -814,7 +921,8 @@ AWARDS = {
 		"icon": "fas fa-pinata",
 		"color": "text-pink",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"tilt": {
 		"kind": "tilt",
@@ -823,7 +931,8 @@ AWARDS = {
 		"icon": "fas fa-car-tilt",
 		"color": "text-blue",
 		"price": 150,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"glowie": {
 		"kind": "glowie",
@@ -832,16 +941,8 @@ AWARDS = {
 		"icon": "fas fa-user-secret",
 		"color": "text-green",
 		"price": 150,
-		"deflectable": False
-	},
-	"agendaposter": {
-		"kind": "agendaposter",
-		"title": "Chud",
-		"description": "Forces the chud theme on the recipient for 24 hours.",
-		"icon": "fas fa-snooze",
-		"color": "text-purple",
-		"price": 500,
-		"deflectable": True
+		"deflectable": False,
+		"cosmetic": True
 	},
 	"rehab": {
 		"kind": "rehab",
@@ -850,7 +951,8 @@ AWARDS = {
 		"icon": "fas fa-dice-six",
 		"color": "text-black",
 		"price": 777,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"offsitementions": {
 		"kind": "offsitementions",
@@ -859,7 +961,8 @@ AWARDS = {
 		"icon": "fas fa-eyes",
 		"color": "text-orange",
 		"price": 1000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"lootbox": {
 		"kind": "lootbox",
@@ -868,7 +971,8 @@ AWARDS = {
 		"icon": "fas fa-box-open",
 		"color": "text-blue",
 		"price": 1000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"beano": {
 		"kind": "beano",
@@ -877,7 +981,8 @@ AWARDS = {
 		"icon": "fas fa-gas-pump-slash",
 		"color": "text-green",
 		"price": 1000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"unpin": {
 		"kind": "unpin",
@@ -886,7 +991,8 @@ AWARDS = {
 		"icon": "fas fa-thumbtack fa-rotate--45",
 		"color": "text-black",
 		"price": 1000,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": False
 	},
 	"flairlock": {
 		"kind": "flairlock",
@@ -895,7 +1001,8 @@ AWARDS = {
 		"icon": "fas fa-lock",
 		"color": "text-black",
 		"price": 1250,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"pin": {
 		"kind": "pin",
@@ -904,7 +1011,8 @@ AWARDS = {
 		"icon": "fas fa-thumbtack fa-rotate--45",
 		"color": "text-warning",
 		"price": 1500,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": False
 	},
 	"progressivestack": {
 		"kind": "progressivestack",
@@ -913,7 +1021,8 @@ AWARDS = {
 		"icon": "fas fa-bullhorn",
 		"color": "text-danger",
 		"price": 1500,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"pizzashill": {
 		"kind": "pizzashill",
@@ -922,7 +1031,8 @@ AWARDS = {
 		"icon": "fas fa-pizza-slice",
 		"color": "text-orange",
 		"price": 1500,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"bird": {
 		"kind": "bird",
@@ -931,7 +1041,8 @@ AWARDS = {
 		"icon": "fab fa-twitter",
 		"color": "text-blue",
 		"price": 1500,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"spider": {
 		"kind": "spider",
@@ -940,7 +1051,18 @@ AWARDS = {
 		"icon": "fas fa-spider",
 		"color": "text-brown",
 		"price": 2000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
+	},
+	"agendaposter": {
+		"kind": "agendaposter",
+		"title": "Chud",
+		"description": "Chuds the recipient for 24 hours.",
+		"icon": "fas fa-snooze",
+		"color": "text-purple",
+		"price": 2500,
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"deflector": {
 		"kind": "deflector",
@@ -949,7 +1071,8 @@ AWARDS = {
 		"icon": "fas fa-shield",
 		"color": "text-pink",
 		"price": 2750,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"marsey": {
 		"kind": "marsey",
@@ -958,7 +1081,8 @@ AWARDS = {
 		"icon": "fas fa-cat",
 		"color": "text-orange",
 		"price": 3000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"ban": {
 		"kind": "ban",
@@ -967,7 +1091,8 @@ AWARDS = {
 		"icon": "fas fa-gavel",
 		"color": "text-danger",
 		"price": 3000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"unban": {
 		"kind": "unban",
@@ -976,7 +1101,8 @@ AWARDS = {
 		"icon": "fas fa-gavel",
 		"color": "text-success",
 		"price": 3500,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"benefactor": {
 		"kind": "benefactor",
@@ -985,7 +1111,8 @@ AWARDS = {
 		"icon": "fas fa-gift",
 		"color": "text-blue",
 		"price": 4000,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": False
 	},
 	"grass": {
 		"kind": "grass",
@@ -994,7 +1121,8 @@ AWARDS = {
 		"icon": "fas fa-seedling",
 		"color": "text-success",
 		"price": 10000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"eye": {
 		"kind": "eye",
@@ -1003,7 +1131,8 @@ AWARDS = {
 		"icon": "fas fa-eye",
 		"color": "text-silver",
 		"price": 10000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"unblockable": {
 		"kind": "unblockable",
@@ -1012,7 +1141,8 @@ AWARDS = {
 		"icon": "fas fa-laugh-squint",
 		"color": "text-lightgreen",
 		"price": 20000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"fish": {
 		"kind": "fish",
@@ -1021,7 +1151,8 @@ AWARDS = {
 		"icon": "fas fa-fish",
 		"color": "text-lightblue",
 		"price": 20000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"pause": {
 		"kind": "pause",
@@ -1030,7 +1161,8 @@ AWARDS = {
 		"icon": "fas fa-volume-mute",
 		"color": "text-danger",
 		"price": 20000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"unpausable": {
 		"kind": "unpausable",
@@ -1039,7 +1171,8 @@ AWARDS = {
 		"icon": "fas fa-volume",
 		"color": "text-success",
 		"price": 40000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"alt": {
 		"kind": "alt",
@@ -1048,7 +1181,8 @@ AWARDS = {
 		"icon": "fas fa-eye",
 		"color": "text-gold",
 		"price": 50000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"checkmark": {
 		"kind": "checkmark",
@@ -1057,7 +1191,8 @@ AWARDS = {
 		"icon": "fas fa-badge-check",
 		"color": "checkmark",
 		"price": 50000,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 }
 
@@ -1070,7 +1205,8 @@ if SITE_NAME != 'rDrama':
 			"icon": "fas fa-paw-simple",
 			"color": "text-purple",
 			"price": 400,
-			"deflectable": True
+			"deflectable": True,
+			"cosmetic": False
 		},
 		"rainbow": {
 			"kind": "rainbow",
@@ -1079,7 +1215,8 @@ if SITE_NAME != 'rDrama':
 			"icon": "fas fa-cloud-rainbow",
 			"color": "text-pink",
 			"price": 400,
-			"deflectable": True
+			"deflectable": True,
+			"cosmetic": False
 		},
 	}
 	AWARDS.update(EXTRA_AWARDS)
@@ -1093,7 +1230,8 @@ if SITE_NAME == 'PCM':
 			"icon": "fas fa-head-side",
 			"color": "text-gold",
 			"price": 150,
-			"deflectable": False
+			"deflectable": False,
+			"cosmetic": True
 		},
 		"toe": {
 			"kind": "toe",
@@ -1102,7 +1240,8 @@ if SITE_NAME == 'PCM':
 			"icon": "fas fa-socks",
 			"color": "text-blue",
 			"price": 150,
-			"deflectable": False
+			"deflectable": False,
+			"cosmetic": True
 		},
 		"crab": {
 			"kind": "crab",
@@ -1111,7 +1250,8 @@ if SITE_NAME == 'PCM':
 			"icon": "fas fa-crab",
 			"color": "text-danger",
 			"price": 4000,
-			"deflectable": False
+			"deflectable": False,
+			"cosmetic": True
 		}
 	}
 	AWARDS.update(PCM_AWARDS)
@@ -1134,7 +1274,8 @@ HOUSE_AWARDS = {
 		"icon": "fas fa-paw-simple",
 		"color": "text-purple",
 		"price": 400,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"Femboy": {
 		"kind": "Femboy",
@@ -1143,7 +1284,8 @@ HOUSE_AWARDS = {
 		"icon": "fas fa-cloud-rainbow",
 		"color": "text-pink",
 		"price": 400,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"Vampire": {
 		"kind": "Vampire",
@@ -1152,7 +1294,8 @@ HOUSE_AWARDS = {
 		"icon": "fas fa-bat",
 		"color": "text-gray",
 		"price": 400,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 	"Racist": {
 		"kind": "Racist",
@@ -1161,7 +1304,8 @@ HOUSE_AWARDS = {
 		"icon": "fas fa-star-of-david",
 		"color": "text-yellow",
 		"price": 400,
-		"deflectable": True
+		"deflectable": True,
+		"cosmetic": False
 	},
 }
 
@@ -1238,8 +1382,6 @@ FACTCHECK_REPLIES = ('<b style="color:#6023f8">Factcheck: This claim has been co
 
 EIGHTBALL_REPLIES = ('<b style="color:#7FEC11">The 8-Ball Says: It is certain.</b>', '<b style="color:#7FEC11">The 8-Ball Says: It is decidedly so.</b>', '<b style="color:#7FEC11">The 8-Ball Says: Without a doubt.</b>', '<b style="color:#7FEC11">The 8-Ball Says: Yes definitely.</b>', '<b style="color:#7FEC11">The 8-Ball Says: You may rely on it.</b>', '<b style="color:#7FEC11">The 8-Ball Says: As I see it, yes.</b>', '<b style="color:#7FEC11">The 8-Ball Says: Most likely.</b>', '<b style="color:#7FEC11">The 8-Ball Says: Outlook good.</b>', '<b style="color:#7FEC11">The 8-Ball Says: Yes.</b>', '<b style="color:#7FEC11">The 8-Ball Says: Signs point to yes.</b>', '<b style="color:#E7890C">The 8-Ball Says: Reply hazy, try again.</b>', '<b style="color:#E7890C">The 8-Ball Says: Ask again later.</b>', '<b style="color:#E7890C">The 8-Ball Says: Better not tell you now.</b>', '<b style="color:#E7890C">The 8-Ball Says: Cannot predict now.</b>', '<b style="color:#E7890C">The 8-Ball Says: Concentrate and ask again.</b>', '<b style="color:#FD4D32">The 8-Ball Says: Don\'t count on it.</b>', '<b style="color:#FD4D32">The 8-Ball Says: My reply is no.</b>', '<b style="color:#FD4D32">The 8-Ball Says: My sources say no.</b>', '<b style="color:#FD4D32">The 8-Ball Says: Outlook not so good.</b>', '<b style="color:#FD4D32">The 8-Ball Says: Very doubtful.</b>')
 
-NOTIF_MODACTION_JL_MIN = PERMS['NOTIFICATIONS_MODERATOR_ACTIONS']
-
 REDDIT_NOTIFS_SITE = set()
 REDDIT_NOTIFS_USERS = {}
 
@@ -1249,7 +1391,7 @@ if len(SITE_NAME) > 5:
 if SITE != 'localhost':
 	REDDIT_NOTIFS_SITE.add(SITE)
 
-if SITE == 'rdrama.net':
+if SITE.startswith('rdrama.'):
 	REDDIT_NOTIFS_SITE.add('marsey')
 	REDDIT_NOTIFS_SITE.add('"r/Drama"')
 	REDDIT_NOTIFS_SITE.add('justice4darrell')
@@ -1498,9 +1640,12 @@ BOOSTED_SITES = {
 	'marsey.club',
 	'odysee.com',
 	'trp.red',
-	'forums.red'
+	'forums.red',
+	'shitposter.club',
+	'sneed.social',
+	'seal.cafe',
 }
 
-IMAGE_FORMATS = ('webp','jpg','jpeg','png','gif','gifv','tif','tiff')
-VIDEO_FORMATS = ('mp4','webm','mov','avi','mkv','flv','m4v','3gp')
-AUDIO_FORMATS = ('mp3','wav','ogg','aac','m4a','flac')
+IMAGE_FORMATS = ['png','gif','jpg','jpeg','webp']
+VIDEO_FORMATS = ['mp4','webm','mov','avi','mkv','flv','m4v','3gp']
+AUDIO_FORMATS = ['mp3','wav','ogg','aac','m4a','flac']

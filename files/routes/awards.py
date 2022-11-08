@@ -5,6 +5,7 @@ from files.helpers.get import *
 from files.helpers.const import *
 from files.helpers.regex import *
 from files.helpers.actions import *
+from files.helpers.useractions import *
 from files.classes.award import *
 from .front import frontlist
 from flask import g, request
@@ -159,7 +160,7 @@ def award_thing(v, thing_type, id):
 	author = thing.author
 	if author.shadowbanned: abort(404)
 
-	if SITE == 'rdrama.net' and author.id in (PIZZASHILL_ID, CARP_ID):
+	if SITE.startswith('rdrama.') and author.id in (PIZZASHILL_ID, CARP_ID):
 		abort(403, "This user is immune to awards.")
 
 	if kind == "benefactor" and author.id == v.id:
@@ -189,7 +190,14 @@ def award_thing(v, thing_type, id):
 			send_repeatable_notification(v.id, msg)
 			author = v
 		elif kind != 'spider':
-			msg = f"@{v.username} has given your [{thing_type}]({thing.shortlink}) the {AWARDS[kind]['title']} Award!"
+			awarded_coins = int(AWARDS[kind]['price'] * COSMETIC_AWARD_COIN_AWARD_PCT) if AWARDS[kind]['cosmetic'] else 0
+			if AWARDS[kind]['cosmetic']:
+				author.coins += awarded_coins
+
+			msg = f"@{v.username} has given your [{thing_type}]({thing.shortlink}) the {AWARDS[kind]['title']} Award"
+			if awarded_coins > 0:
+				msg += f" and you have received {awarded_coins} coins as a result"
+			msg += "!"
 			if note: msg += f"\n\n> {note}"
 			send_repeatable_notification(author.id, msg)
 
@@ -264,9 +272,10 @@ def award_thing(v, thing_type, id):
 			author.flairchanged += 86400
 		else:
 			author.customtitleplain = new_name
+			new_name = filter_emojis_only(new_name)
 			new_name = censor_slurs(new_name, None)
-			author.customtitle = filter_emojis_only(new_name)
-			if len(author.customtitle) > 1000: abort(403)
+			if len(new_name) > 1000: abort(403)
+			author.customtitle = new_name
 			author.flairchanged = int(time.time()) + 86400
 			badge_grant(user=author, badge_id=96)
 	elif kind == "pause":
@@ -326,8 +335,8 @@ def award_thing(v, thing_type, id):
 		badge_grant(user=author, badge_id=150)
 	elif kind == 'marsify':
 		if not author.marsify or author.marsify != 1:
-			if author.marsify: author.marsify += 21600
-			else: author.marsify = int(time.time()) + 21600
+			if author.marsify: author.marsify += 86400
+			else: author.marsify = int(time.time()) + 86400
 		badge_grant(user=author, badge_id=170)
 
 		if thing_type == 'comment' and not author.deflector:

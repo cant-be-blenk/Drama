@@ -4,10 +4,11 @@ from typing import Union
 
 from files.__main__ import app, limiter
 from files.helpers.const import *
-from files.helpers.actions import *
+from files.helpers.useractions import *
 from files.helpers.media import *
 from files.helpers.get import *
 from files.helpers.wrappers import *
+from files.helpers.cloudflare import purge_files_in_cache
 from files.routes.static import marsey_list
 
 if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
@@ -44,9 +45,9 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 	@auth_required
 	def submit_marsey(v):
 		file = request.files["image"]
-		name = request.values.get('name').lower().strip()
-		tags = request.values.get('tags').lower().strip()
-		username = request.values.get('author').lower().strip()
+		name = request.values.get('name', '').lower().strip()
+		tags = request.values.get('tags', '').lower().strip()
+		username = request.values.get('author', '').lower().strip()
 
 		def error(error):
 			if v.admin_level >= PERMS['VIEW_PENDING_SUBMITTED_MARSEYS']: marseys = g.db.query(Marsey).filter(Marsey.submitter_id != None).all()
@@ -182,7 +183,7 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			asset = g.db.get(cls, name)
 		if not asset:
 			abort(404, f"This {type_name} '{name}' doesn't exist!")
-		if v.id not in (asset.submitter_id, AEVANN_ID, CARP_ID):
+		if v.id != asset.submitter_id and v.id not in CAN_APPROVE_ASSETS:
 			abort(403, f"Only Carp can remove {type_name}s!")
 		name = asset.name
 		if v.id != asset.submitter_id:
@@ -209,9 +210,9 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 	@app.post("/submit/hats")
 	@auth_required
 	def submit_hat(v):
-		name = request.values.get('name').strip()
-		description = request.values.get('description').strip()
-		username = request.values.get('author').strip()
+		name = request.values.get('name', '').strip()
+		description = request.values.get('description', '').strip()
+		username = request.values.get('author', '').strip()
 
 		def error(error):
 			if v.admin_level >= PERMS['VIEW_PENDING_SUBMITTED_HATS']: hats = g.db.query(HatDef).filter(HatDef.submitter_id != None).all()
@@ -247,8 +248,8 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 				os.remove(highquality)
 				return error("Images must be 100x130")
 
-		if len(list(Iterator(i))) > 1: price = 1000
-		else: price = 500
+			if len(list(Iterator(i))) > 1: price = 1000
+			else: price = 500
 
 		filename = f'/asset_submissions/hats/{name}.webp'
 		copyfile(highquality, filename)
@@ -256,7 +257,6 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 
 		hat = HatDef(name=name, author_id=author.id, description=description, price=price, submitter_id=v.id)
 		g.db.add(hat)
-
 		g.db.commit()
 
 		if v.admin_level >= PERMS['VIEW_PENDING_SUBMITTED_HATS']: hats = g.db.query(HatDef).filter(HatDef.submitter_id != None).all()
@@ -326,7 +326,6 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 
 		return {"message": f"'{hat.name}' approved!"}
 
-
 	@app.post("/remove/hat/<name>")
 	@auth_required
 	def remove_hat(v, name):
@@ -343,9 +342,10 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 		if name:
 			marsey = g.db.get(Marsey, name)
 			if marsey:
-				tags = marsey.tags
+				tags = marsey.tags or ''
 			else:
-				name = None
+				name = ''
+				tags = ''
 				error = "A marsey with this name doesn't exist!"
 		return render_template("update_assets.html", v=v, error=error, name=name, tags=tags, type="Marsey")
 
@@ -357,8 +357,8 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			abort(403)
 
 		file = request.files["image"]
-		name = request.values.get('name').lower().strip()
-		tags = request.values.get('tags').lower().strip()
+		name = request.values.get('name', '').lower().strip()
+		tags = request.values.get('tags', '').lower().strip()
 
 		def error(error):
 			return render_template("update_assets.html", v=v, error=error, name=name, tags=tags, type="Marsey")
@@ -376,7 +376,7 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			if not file.content_type.startswith('image/'):
 				return error("You need to submit an image!")
 			
-			for x in ('png','jpeg','webp','gif'):
+			for x in IMAGE_FORMATS:
 				if path.isfile(f'/asset_submissions/marseys/original/{name}.{x}'):
 					os.remove(f'/asset_submissions/marseys/original/{name}.{x}')
 
@@ -392,7 +392,7 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			process_image(filename, resize=200, trim=True)
 			purge_files_in_cache([f"https://{SITE}/e/{name}.webp", f"https://{SITE}/assets/images/emojis/{name}.webp", f"https://{SITE}/asset_submissions/marseys/original/{name}.{format}"])
 		
-		if tags and existing.tags != tags:
+		if tags and existing.tags != tags and tags != "none":
 			existing.tags = tags
 			g.db.add(existing)
 		elif not file:
@@ -404,7 +404,6 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			_note=f'<a href="/e/{name}.webp">{name}</a>'
 		)
 		g.db.add(ma)
-
 		return render_template("update_assets.html", v=v, msg=f"'{name}' updated successfully!", name=name, tags=tags, type="Marsey")
 
 	@app.get("/admin/update/hats")
@@ -412,18 +411,17 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 	def update_hats(v):
 		if AEVANN_ID and v.id not in CAN_UPDATE_ASSETS:
 			abort(403)
-
 		return render_template("update_assets.html", v=v, type="Hat")
 
 
 	@app.post("/admin/update/hats")
 	@admin_level_required(PERMS['UPDATE_HATS'])
 	def update_hat(v):
-		if AEVANN_ID and v.id not in (AEVANN_ID, CARP_ID, GEESE_ID, SNAKES_ID):
+		if AEVANN_ID and v.id not in CAN_UPDATE_ASSETS:
 			abort(403)
 
 		file = request.files["image"]
-		name = request.values.get('name').strip()
+		name = request.values.get('name', '').strip()
 
 		def error(error):
 			return render_template("update_assets.html", v=v, error=error, type="Hat")
@@ -452,7 +450,7 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			format = i.format.lower()
 		new_path = f'/asset_submissions/hats/original/{name}.{format}'
 
-		for x in ('png','jpeg','webp','gif'):
+		for x in IMAGE_FORMATS:
 			if path.isfile(f'/asset_submissions/hats/original/{name}.{x}'):
 				os.remove(f'/asset_submissions/hats/original/{name}.{x}')
 
@@ -468,5 +466,4 @@ if SITE not in ('pcmemes.net', 'watchpeopledie.tv'):
 			_note=f'<a href="/i/hats/{name}.webp">{name}</a>'
 		)
 		g.db.add(ma)
-
 		return render_template("update_assets.html", v=v, msg=f"'{name}' updated successfully!", type="Hat")

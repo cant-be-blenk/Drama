@@ -29,6 +29,7 @@ class Submission(Base):
 	thumburl = Column(String)
 	is_banned = Column(Boolean, default=False)
 	bannedfor = Column(String)
+	chuddedfor = Column(String)
 	ghost = Column(Boolean, default=False)
 	views = Column(Integer, default=0)
 	deleted_utc = Column(Integer, default=0)
@@ -79,7 +80,7 @@ class Submission(Base):
 
 	@lazy
 	def can_see(self, v):
-		if SITE != 'rdrama.net': return True
+		if not SITE.startswith('rdrama.'): return True
 		if self.sub != 'chudrama': return True
 		if v:
 			if v.can_see_chudrama: return True
@@ -323,7 +324,7 @@ class Submission(Base):
 					body += " - <b>WINNER!</b>"
 				
 				if not winner and v and v.admin_level >= PERMS['POST_BETS_DISTRIBUTE']:
-					body += f'''<button class="btn btn-primary distribute" data-click="postToast(this,'/distribute/{o.id}',true)" onclick="areyousure(this)">Declare winner</button>'''
+					body += f'''<button class="btn btn-primary distribute" data-click="postToastReload(this,'/distribute/{o.id}')" onclick="areyousure(this)">Declare winner</button>'''
 				body += "</div>"
 			else:
 				input_type = 'radio' if o.exclusive else 'checkbox'

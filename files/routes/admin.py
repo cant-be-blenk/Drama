@@ -11,7 +11,8 @@ from files.helpers.get import *
 from files.helpers.media import *
 from files.helpers.const import *
 from files.helpers.actions import *
-from files.helpers.cloudflare import *
+from files.helpers.useractions import *
+import files.helpers.cloudflare as cloudflare
 from files.classes import *
 from flask import *
 from files.__main__ import app, cache, limiter
@@ -34,7 +35,7 @@ def kippy(v):
 @admin_level_required(PERMS['VIEW_ACTIVE_USERS'])
 def loggedin_list(v):
 	ids = [x for x,val in cache.get(f'{SITE}_loggedin').items() if time.time()-val < LOGGEDIN_ACTIVE_TIME]
-	users = g.db.query(User).filter(User.id.in_(ids)).order_by(User.admin_level.desc(), User.truecoins.desc()).all()
+	users = g.db.query(User).filter(User.id.in_(ids)).order_by(User.admin_level.desc(), User.truescore.desc()).all()
 	return render_template("loggedin.html", v=v, users=users)
 
 @app.get('/admin/loggedout')
@@ -90,7 +91,7 @@ def merge(v, id1, id2):
 			g.db.add(exile)
 			g.db.flush()
 
-	for kind in ('comment_count', 'post_count', 'winnings', 'received_award_count', 'coins_spent', 'lootboxes_bought', 'coins', 'truecoins', 'procoins'):
+	for kind in ('comment_count', 'post_count', 'winnings', 'received_award_count', 'coins_spent', 'lootboxes_bought', 'coins', 'truescore', 'procoins'):
 		amount = getattr(user1, kind) + getattr(user2, kind)
 		setattr(user1, kind, amount)
 		setattr(user2, kind, 0)
@@ -140,7 +141,7 @@ def merge_all(v, id):
 			g.db.flush()
 
 	for alt in user.alts_unique:
-		for kind in ('comment_count', 'post_count', 'winnings', 'received_award_count', 'coins_spent', 'lootboxes_bought', 'coins', 'truecoins', 'procoins'):
+		for kind in ('comment_count', 'post_count', 'winnings', 'received_award_count', 'coins_spent', 'lootboxes_bought', 'coins', 'truescore', 'procoins'):
 			amount = getattr(user, kind) + getattr(alt, kind)
 			setattr(user, kind, amount)
 			setattr(alt, kind, 0)
@@ -158,7 +159,7 @@ def merge_all(v, id):
 @app.post("/@<username>/make_admin")
 @admin_level_required(PERMS['ADMIN_ADD'])
 def make_admin(v, username):
-	if SITE == 'rdrama.net': abort(403)
+	if SITE.startswith('rdrama.'): abort(403)
 
 	user = get_user(username)
 
@@ -378,7 +379,8 @@ def image_posts_listing(v):
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def reported_posts(v):
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
 
 	listing = g.db.query(Submission).filter_by(
 		is_approved=None,
@@ -400,7 +402,8 @@ def reported_posts(v):
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def reported_comments(v):
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
 
 	listing = g.db.query(Comment
 					).filter_by(
@@ -428,7 +431,7 @@ def admin_home(v):
 	under_attack = False
 
 	if v.admin_level >= PERMS['SITE_SETTINGS_UNDER_ATTACK']:
-		under_attack = (get_security_level() or 'high') == 'under_attack'
+		under_attack = (cloudflare.get_security_level() or 'high') == 'under_attack'
 
 	gitref = admin_git_head()
 	
@@ -472,33 +475,41 @@ def change_settings(v, setting):
 
 	return {'message': f"{setting} {word}d successfully!"}
 
-
-@app.post("/admin/purge_cache")
+@app.post("/admin/clear_cloudflare_cache")
 @admin_level_required(PERMS['SITE_CACHE_PURGE_CDN'])
-def purge_cache(v):
-	online = cache.get(ONLINE_STR)
-	cache.clear()
-	cache.set(ONLINE_STR, online)
-	if not purge_entire_cache():
-		abort(400, 'Failed to purge cache')
+def clear_cloudflare_cache(v):
+	if not cloudflare.clear_cloudflare_cache():
+		abort(400, 'Failed to clear cloudflare cache!')
 	ma = ModAction(
-		kind="purge_cache",
+		kind="clear_cloudflare_cache",
 		user_id=v.id
 	)
 	g.db.add(ma)
-	return {"message": "Cache purged!"}
+	return {"message": "Cloudflare cache cleared!"}
 
+@app.post("/admin/clear_internal_cache")
+@admin_level_required(PERMS['SITE_CACHE_DUMP_INTERNAL'])
+def admin_clear_internal_cache(v):
+	online = cache.get(ONLINE_STR)
+	cache.clear()
+	cache.set(ONLINE_STR, online)
+	ma = ModAction(
+		kind="clear_internal_cache",
+		user_id=v.id
+	)
+	g.db.add(ma)
+	return {"message": "Internal cache cleared!"}
 
 @app.post("/admin/under_attack")
 @admin_level_required(PERMS['SITE_SETTINGS_UNDER_ATTACK'])
 def under_attack(v):
-	response = get_security_level()
+	response = cloudflare.get_security_level()
 	if not response:
 		abort(400, 'Could not retrieve the current security level')
 	old_under_attack_mode = response == 'under_attack'
 	enable_disable_str = 'disable' if old_under_attack_mode else 'enable'
 	new_security_level = 'high' if old_under_attack_mode else 'under_attack'
-	if not set_security_level(new_security_level):
+	if not cloudflare.set_security_level(new_security_level):
 		abort(400, f'Failed to {enable_disable_str} under attack mode')
 	ma = ModAction(
 		kind=f"{enable_disable_str}_under_attack",
@@ -744,8 +755,8 @@ def admin_link_accounts(v):
 	g.db.add(new_alt)
 	g.db.flush()
 
-	check_for_alts(g.db.get(User, u1))
-	check_for_alts(g.db.get(User, u2))
+	check_for_alts(g.db.get(User, u1), include_current_session=False)
+	check_for_alts(g.db.get(User, u2), include_current_session=False)
 
 	ma = ModAction(
 		kind="link_accounts",
@@ -797,43 +808,6 @@ def admin_removed_comments(v):
 						next_exists=next_exists
 						)
 
-
-@app.post("/agendaposter/<user_id>")
-@admin_level_required(PERMS['USER_AGENDAPOSTER'])
-def agendaposter(user_id, v):
-	user = get_account(user_id)
-
-	days = request.values.get("days")
-
-	if days:
-		expiry = int(time.time() + float(days)*60*60*24)
-	else: expiry = 1
-
-	user.agendaposter = expiry
-	g.db.add(user)
-
-	if days:
-		days_txt = str(days).split('.0')[0]
-		note = f"for {days_txt} days"
-	else: note = "permanently"
-
-	ma = ModAction(
-		kind="agendaposter",
-		user_id=v.id,
-		target_user_id=user.id,
-		_note=note
-	)
-	g.db.add(ma)
-
-	badge_grant(user=user, badge_id=28)
-
-	send_repeatable_notification(user.id, f"@{v.username} (Admin) has marked you as a chud ({note}).")
-
-	
-	return redirect(user.url)
-
-
-
 @app.post("/unagendaposter/<user_id>")
 @admin_level_required(PERMS['USER_AGENDAPOSTER'])
 def unagendaposter(user_id, v):
@@ -847,7 +821,7 @@ def unagendaposter(user_id, v):
 		g.db.add(alt)
 
 	ma = ModAction(
-		kind="unagendaposter",
+		kind="unchud",
 		user_id=v.id,
 		target_user_id=user.id
 	)
@@ -857,9 +831,9 @@ def unagendaposter(user_id, v):
 	badge = user.has_badge(28)
 	if badge: g.db.delete(badge)
 
-	send_repeatable_notification(user.id, f"@{v.username} (Admin) has unmarked you as a chud.")
+	send_repeatable_notification(user.id, f"@{v.username} (Admin) has unchudded you.")
 
-	return {"message": f"@{user.username}'s chud theme has been disabled!"}
+	return {"message": f"@{user.username} has been unchudded!"}
 
 
 @app.post("/shadowban/<user_id>")
@@ -867,7 +841,8 @@ def unagendaposter(user_id, v):
 @admin_level_required(PERMS['USER_SHADOWBAN'])
 def shadowban(user_id, v):
 	user = get_account(user_id)
-	if user.admin_level != 0: abort(403)
+	if user.admin_level > v.admin_level:
+		abort(403)
 	user.shadowbanned = v.username
 	reason = request.values.get("reason").strip()[:256]
 	user.ban_reason = reason
@@ -890,7 +865,7 @@ def shadowban(user_id, v):
 	
 	cache.delete_memoized(frontlist)
 
-	return redirect(user.url)
+	return {"message": f"@{user.username} has been shadowbanned!"}
 
 @app.post("/unshadowban/<user_id>")
 @limiter.limit("1/second;30/minute;200/hour;1000/day")
@@ -914,7 +889,7 @@ def unshadowban(user_id, v):
 	
 	cache.delete_memoized(frontlist)
 
-	return redirect(user.url)
+	return {"message": f"@{user.username} has been unshadowbanned!"}
 
 
 @app.post("/admin/title_change/<user_id>")
@@ -928,6 +903,7 @@ def admin_title_change(user_id, v):
 
 	user.customtitleplain=new_name
 	new_name = filter_emojis_only(new_name)
+	new_name = censor_slurs(new_name, None)
 
 	user=get_account(user.id)
 	user.customtitle=new_name
@@ -950,7 +926,7 @@ def admin_title_change(user_id, v):
 		)
 	g.db.add(ma)
 
-	return redirect(user.url)
+	return {"message": f"@{user.username}'s flair has been changed!"}
 
 @app.post("/ban_user/<user_id>")
 @limiter.limit("1/second;30/minute;200/hour;1000/day")
@@ -983,7 +959,8 @@ def ban_user(user_id, v):
 
 	duration = "permanently"
 	if days:
-		days_txt = str(days).split('.0')[0]
+		days_txt = str(days)
+		if days_txt.endswith('.0'): days_txt = days_txt[:-2]
 		duration = f"for {days_txt} day"
 		if days != 1: duration += "s"
 		if reason: text = f"@{v.username} (Admin) has banned you for **{days_txt}** days for the following reason:\n\n> {reason}"
@@ -994,7 +971,7 @@ def ban_user(user_id, v):
 
 	send_repeatable_notification(user.id, text)
 
-	note = f'reason: "{reason}", duration: {duration}'
+	note = f'duration: {duration}, reason: "{reason}"'
 	ma=ModAction(
 		kind="ban_user",
 		user_id=v.id,
@@ -1017,8 +994,73 @@ def ban_user(user_id, v):
 			comment.bannedfor = f'{duration} by @{v.username}'
 			g.db.add(comment)
 
-	if 'redir' in request.values: return redirect(user.url)
-	else: return {"message": f"@{user.username} has been banned!"}
+	return {"message": f"@{user.username} has been banned!"}
+
+
+@app.post("/agendaposter/<user_id>")
+@admin_level_required(PERMS['USER_AGENDAPOSTER'])
+def agendaposter(user_id, v):
+	user = get_account(user_id)
+
+	if user.admin_level > v.admin_level:
+		abort(403)
+
+	days = 0.0
+	try:
+		days = float(request.values.get("days"))
+	except:
+		pass
+
+	reason = request.values.get("reason", "").strip()
+	if reason and reason.startswith("/") and '\\' not in reason:
+		reason = f'<a href="{reason.split()[0]}">{reason}</a>'
+
+	duration = "permanently"
+	if days:
+		user.agendaposter = int(time.time()) + (days * 86400)
+		days_txt = str(days)
+		if days_txt.endswith('.0'): days_txt = days_txt[:-2]
+		duration = f"for {days_txt} day"
+		if days != 1: duration += "s"
+		if reason: text = f"@{v.username} (Admin) has chudded you for **{days_txt}** days for the following reason:\n\n> {reason}"
+		else: text = f"@{v.username} (Admin) has chudded you for **{days_txt}** days."
+	else:
+		user.agendaposter = 1
+		if reason: text = f"@{v.username} (Admin) has chudded you permanently for the following reason:\n\n> {reason}"
+		else: text = f"@{v.username} (Admin) has chudded you permanently."
+
+	g.db.add(user)
+
+	send_repeatable_notification(user.id, text)
+
+	note = f'duration: {duration}'
+	if reason: note += f', reason: "{reason}"'
+
+	ma=ModAction(
+		kind="chud",
+		user_id=v.id,
+		target_user_id=user.id,
+		_note=note
+		)
+	g.db.add(ma)
+
+	badge_grant(user=user, badge_id=28)
+
+	if 'reason' in request.values:
+		if request.values["reason"].startswith("/post/"):
+			try: post = int(request.values["reason"].split("/post/")[1].split(None, 1)[0])
+			except: abort(400)
+			post = get_post(post)
+			post.chuddedfor = f'{duration} by @{v.username}'
+			g.db.add(post)
+		elif request.values["reason"].startswith("/comment/"):
+			try: comment = int(request.values["reason"].split("/comment/")[1].split(None, 1)[0])
+			except: abort(400)
+			comment = get_comment(comment)
+			comment.chuddedfor = f'{duration} by @{v.username}'
+			g.db.add(comment)
+
+	return {"message": f"@{user.username} has been chudded!"}
 
 
 @app.post("/unban_user/<user_id>")
@@ -1052,8 +1094,7 @@ def unban_user(user_id, v):
 		)
 	g.db.add(ma)
 
-	if "@" in request.referrer: return redirect(user.url)
-	else: return {"message": f"@{user.username} has been unbanned!"}
+	return {"message": f"@{user.username} has been unbanned!"}
 
 @app.post("/mute_user/<int:user_id>/<int:mute_status>")
 @limiter.limit("1/second;30/minute;200/hour;1000/day")
@@ -1109,7 +1150,7 @@ def remove_post(post_id, v):
 
 	v.coins += 1
 	g.db.add(v)
-	purge_files_in_cache(f"https://{SITE}/logged_out")
+	cloudflare.purge_files_in_cache(f"https://{SITE}/logged_out")
 	return {"message": "Post removed!"}
 
 
@@ -1182,17 +1223,18 @@ def sticky_post(post_id, v):
 
 	pins = g.db.query(Submission).filter(Submission.stickied != None, Submission.is_banned == False).count()
 	extra_pin_slots = 1 if post.stickied else 0
+	sticky_time = int(time.time()) + 3600 if not post.stickied else None
 
-	if pins >= PIN_LIMIT + extra_pin_slots and v.admin_level < PERMS['BYPASS_PIN_LIMIT']:
+	if pins >= PIN_LIMIT + extra_pin_slots and v.admin_level < PERMS['BYPASS_PIN_LIMIT_IF_TEMPORARY'] and not sticky_time:
 		abort(403, f"Can't exceed {PIN_LIMIT} pinned posts limit!")
 
 	if not post.stickied_utc:
-		post.stickied_utc = int(time.time()) + 3600
+		post.stickied_utc = sticky_time
 		pin_time = 'for 1 hour'
 		if v.id != post.author_id:
 			send_repeatable_notification(post.author_id, f"@{v.username} (Admin) has pinned [{post.title}](/post/{post_id})!")
 	else:
-		post.stickied_utc = None
+		post.stickied_utc = sticky_time
 		pin_time = 'permanently'
 
 	post.stickied = v.username
@@ -1360,22 +1402,6 @@ def admin_distinguish_comment(c_id, v):
 	if comment.distinguish_level: return {"message": "Comment distinguished!"}
 	else: return {"message": "Comment undistinguished!"}
 
-@app.get("/admin/dump_cache")
-@admin_level_required(PERMS['SITE_CACHE_DUMP_INTERNAL'])
-def admin_dump_cache(v):
-	online = cache.get(ONLINE_STR)
-	cache.clear()
-	cache.set(ONLINE_STR, online)
-
-	ma = ModAction(
-		kind="dump_cache",
-		user_id=v.id
-	)
-	g.db.add(ma)
-
-	return {"message": "Internal cache cleared."}
-
-
 @app.get("/admin/banned_domains/")
 @admin_level_required(PERMS['DOMAINS_BAN'])
 def admin_banned_domains(v):
@@ -1457,7 +1483,7 @@ def admin_nuke_user(v):
 		)
 	g.db.add(ma)
 
-	return redirect(user.url)
+	return {"message": f"@{user.username}'s content has been removed!"}
 
 
 @app.post("/admin/unnuke_user")
@@ -1492,4 +1518,4 @@ def admin_nunuke_user(v):
 		)
 	g.db.add(ma)
 
-	return redirect(user.url)
+	return {"message": f"@{user.username}'s content has been approved!"}

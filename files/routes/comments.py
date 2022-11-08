@@ -14,6 +14,7 @@ from files.__main__ import app, limiter
 from files.helpers.sanitize import filter_emojis_only
 from files.helpers.marsify import marsify
 from files.helpers.owoify import owoify
+from files.helpers.cloudflare import purge_files_in_cache
 import requests
 from shutil import copyfile
 from json import loads
@@ -130,6 +131,9 @@ def comment(v):
 			abort(403, "You have to type less than 140 characters!")
 
 	if not body and not request.files.get('file'): abort(400, "You need to actually write something!")
+
+	if v.admin_level < PERMS['POST_COMMENT_MODERATION'] and parent.author.any_block_exists(v):
+		abort(403, "You can't reply to users who have blocked you or users that you have blocked.")
 	
 	options = []
 	for i in poll_regex.finditer(body):
@@ -212,11 +216,8 @@ def comment(v):
 																	).first()
 		if existing: abort(409, f"You already made that comment: /comment/{existing.id}")
 
-	if parent.author.any_block_exists(v) and v.admin_level < PERMS['POST_COMMENT_MODERATION']:
-		abort(403, "You can't reply to users who have blocked you or users that you have blocked.")
-
 	is_bot = (v.client is not None
-		and v.id != BBBB_ID
+		and v.id not in PRIVILEGED_USER_BOTS
 		or (SITE == 'pcmemes.net' and v.id == SNAPPY_ID))
 
 	execute_antispam_comment_check(body, v)
@@ -357,34 +358,7 @@ def comment(v):
 		parent_post.comment_count += 1
 		g.db.add(parent_post)
 
-	body = c.body.lower()
-	if FEATURES['GAMBLING'] and '!slots' in body:
-		if v.rehab:
-			abort(403, "You are under Rehab award effect!")
-
-		if '!slotsmb' in body:
-			command_word = '!slotsmb'
-			currency = 'procoins'
-		else:
-			command_word = '!slots'
-			currency = 'coins'
-
-		wager = body.split(command_word)[1].split()[0]
-
-		try:
-			wager = int(wager)
-		except:
-			abort(400, "Invalid wager.")
-
-		if wager < 100: 
-			abort(400, f"Wager must be 100 {currency} or more")
-
-		if (currency == "coins" and wager > v.coins) or (currency == "procoins" and wager > v.procoins):
-			abort(400, f"Not enough {currency} to make that bet")
-
-		game_id, game_state = casino_slot_pull(v, wager, currency)
-
-		c.casino_game_id = game_id
+	check_slots_command(v, v, c)
 
 	g.db.flush()
 

@@ -273,7 +273,7 @@ def remove_mod(v, sub):
 	sub = get_sub_by_name(sub).name
 	
 	if not v.mods(sub): abort(403)
-	if v.shadowbanned: return redirect(f'/h/{sub}/mods')
+	if v.shadowbanned: abort(500)
 
 	uid = request.values.get('uid')
 
@@ -304,7 +304,7 @@ def remove_mod(v, sub):
 	)
 	g.db.add(ma)
 
-	return redirect(f'/h/{sub}/mods')
+	return {"message": f"@{user.username} has been removed as a mod!"}
 
 @app.get("/create_hole")
 @is_not_permabanned
@@ -359,28 +359,16 @@ def kick(v, pid):
 	old = post.sub
 	post.sub = None
 	
-	if v.admin_level >= PERMS['HOLE_GLOBAL_MODERATION'] and v.id != post.author_id:
-		old_str = f'<a href="/h/{old}">/h/{old}</a>'
-		ma = ModAction(
-			kind='move_hole',
-			user_id=v.id,
-			target_submission_id=post.id,
-			_note=f'{old_str} → main feed',
-		)
-		g.db.add(ma)
-	else:
-		ma = SubAction(
-			sub=old,
-			kind='kick_post',
-			user_id=v.id,
-			target_submission_id=post.id
-		)
-		g.db.add(ma)
+	ma = SubAction(
+		sub=old,
+		kind='kick_post',
+		user_id=v.id,
+		target_submission_id=post.id
+	)
+	g.db.add(ma)
 
 	if v.id != post.author_id:
-		if v.admin_level >= PERMS['HOLE_GLOBAL_MODERATION']: position = 'Admin'
-		else: position = 'Mod'
-		message = f"@{v.username} ({position}) has moved [{post.title}]({post.shortlink}) from /h/{old} to the main feed!"
+		message = f"@{v.username} (Mod) has moved [{post.title}]({post.shortlink}) from /h/{old} to the main feed!"
 		send_repeatable_notification(post.author_id, message)
 
 	g.db.add(post)
@@ -743,7 +731,7 @@ def hole_log(v, sub):
 	mods = [x[0] for x in g.db.query(Mod.user_id).filter_by(sub=sub.name).all()]
 	mods = [x[0] for x in g.db.query(User.username).filter(User.id.in_(mods)).order_by(User.username).all()]
 
-	return render_template("log.html", v=v, admins=mods, types=types, admin=mod, type=kind, actions=actions, next_exists=next_exists, page=page, sub=sub)
+	return render_template("log.html", v=v, admins=mods, types=types, admin=mod, type=kind, actions=actions, next_exists=next_exists, page=page, sub=sub, single_user_url='mod')
 
 @app.get("/h/<sub>/log/<id>")
 @auth_required
@@ -762,4 +750,4 @@ def hole_log_item(id, v, sub):
 
 	types = ACTIONTYPES
 
-	return render_template("log.html", v=v, actions=[action], next_exists=False, page=1, action=action, admins=mods, types=types, sub=sub)
+	return render_template("log.html", v=v, actions=[action], next_exists=False, page=1, action=action, admins=mods, types=types, sub=sub, single_user_url='mod')

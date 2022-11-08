@@ -1,32 +1,11 @@
 from flask import g
-from files.classes.badges import Badge
 from files.helpers.alerts import send_repeatable_notification
 from files.helpers.const import *
 from files.helpers.get import *
 from files.helpers.sanitize import *
+from files.helpers.slots import check_slots_command
 import random
 from urllib.parse import quote
-
-def badge_grant(user, badge_id, description=None, url=None, notify=True):
-	assert user != None
-	if user.has_badge(badge_id):
-		return
-
-	badge = Badge(
-		badge_id=int(badge_id),
-		user_id=user.id,
-		description=description,
-		url=url,
-	)
-
-	g.db.add(badge)
-	g.db.flush()
-
-	if notify:
-		send_repeatable_notification(user.id,
-			f"@AutoJanny has given you the following profile badge:\n\n" +
-			f"![]({badge.path})\n\n**{badge.name}**\n\n{badge.badge.description}")
-
 
 headers = {'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)'}
 
@@ -93,6 +72,8 @@ def execute_snappy(post, v):
 						)
 			g.db.add(vote)
 			post.upvotes += 1
+		elif body == '!slots':
+			body = f'!slots{snappy.coins}'
 
 	body += "\n\n"
 
@@ -126,9 +107,7 @@ def execute_snappy(post, v):
 
 	for href, title in captured:
 		if href.startswith(SITE_FULL) or href.startswith(f'https://{BAN_EVASION_DOMAIN}'): continue
-
 		if "Snapshots:\n\n" not in body: body += "Snapshots:\n\n"
-
 		if f'**[{title}]({href})**:\n\n' not in body:
 			addition = f'**[{title}]({href})**:\n\n'
 			if href.startswith('https://old.reddit.com/r/'):
@@ -140,6 +119,7 @@ def execute_snappy(post, v):
 			addition += f'* [archive.org](https://web.archive.org/{href})\n'
 			addition += f'* [ghostarchive.org](https://ghostarchive.org/search?term={quote(href)})\n'
 			addition += f'* [archive.ph](https://archive.ph/?url={quote(href)}&run=1) (click to archive)\n'
+			addition += '\n'
 			if len(f'{body}{addition}') > COMMENT_BODY_LENGTH_LIMIT: break
 			body += addition
 			archive_url(href)
@@ -165,6 +145,8 @@ def execute_snappy(post, v):
 
 		g.db.add(c)
 
+		check_slots_command(v, snappy, c)
+
 		snappy.comment_count += 1
 		snappy.coins += 1
 		g.db.add(snappy)
@@ -180,7 +162,7 @@ def execute_snappy(post, v):
 			text = f"@Snappy has banned you for **{days}** days for the following reason:\n\n> {reason}"
 			send_repeatable_notification(v.id, text)
 			duration = f"for {days} days"
-			note = f'reason: "{reason}", duration: {duration}'
+			note = f'duration: {duration}, reason: "{reason}"'
 			ma=ModAction(
 				kind="ban_user",
 				user_id=snappy.id,
@@ -430,7 +412,7 @@ def execute_lawlz_actions(v:User, p:Submission):
 	p.stickied_utc = int(time.time()) + 86400
 	p.stickied = v.username
 	p.distinguish_level = 6
-	p.flair = ":ben10: Required Reading"
+	p.flair = filter_emojis_only(":ben10: Required Reading")
 	pin_time = 'for 1 day'
 	ma_1=ModAction(
 		kind="pin_post",
@@ -468,7 +450,7 @@ def execute_pizza_autovote(v:User, target:Union[Submission, Comment]):
 		autovote.created_utc += 1
 		g.db.add(autovote)
 	v.coins += votes
-	v.truecoins += votes
+	v.truescore += votes
 	g.db.add(v)
 	target.upvotes += votes
 	g.db.add(target)

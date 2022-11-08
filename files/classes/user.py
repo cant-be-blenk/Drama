@@ -78,7 +78,8 @@ class User(Base):
 	over_18 = Column(Boolean, default=False)
 	hidevotedon = Column(Boolean, default=False)
 	highlightcomments = Column(Boolean, default=True)
-	slurreplacer = Column(Boolean, default=True)
+	slurreplacer = Column(Integer, default=1)
+	profanityreplacer = Column(Integer, default=1)
 	flairchanged = Column(Integer)
 	newtab = Column(Boolean, default=False)
 	newtabexternal = Column(Boolean, default=True)
@@ -106,7 +107,7 @@ class User(Base):
 	club_allowed = Column(Boolean)
 	login_nonce = Column(Integer, default=0)
 	coins = Column(Integer, default=0)
-	truecoins = Column(Integer, default=0)
+	truescore = Column(Integer, default=0)
 	procoins = Column(Integer, default=0)
 	mfa_secret = deferred(Column(String))
 	is_private = Column(Boolean, default=False)
@@ -172,20 +173,22 @@ class User(Base):
 		g.db.flush()
 		
 
-	def charge_account(self, currency, amount):
+	def charge_account(self, currency, amount, **kwargs):
 		in_db = g.db.query(User).filter(User.id == self.id).with_for_update().one()
 		succeeded = False
+
+		should_check_balance = kwargs.get('should_check_balance', True)
 
 		if currency == 'coins':
 			account_balance = in_db.coins
 			
-			if account_balance >= amount:
+			if not should_check_balance or account_balance >= amount:
 				g.db.query(User).filter(User.id == self.id).update({ User.coins: User.coins - amount })
 				succeeded = True
 		elif currency == 'procoins':
 			account_balance = in_db.procoins
 			
-			if account_balance >= amount:
+			if not should_check_balance or account_balance >= amount:
 				g.db.query(User).filter(User.id == self.id).update({ User.procoins: User.procoins - amount })
 				succeeded = True
 
@@ -286,11 +289,10 @@ class User(Base):
 		if self.agendaposter: return False
 		if self.profile_url.startswith('/e/') and not self.customtitle and self.namecolor == DEFAULT_COLOR: return False
 		return True
-
 	@lazy
 	def mods(self, sub):
 		if self.is_suspended_permanently or self.shadowbanned: return False
-		return self.admin_level >= PERMS['HOLE_GLOBAL_MODERATION'] or bool(g.db.query(Mod.user_id).filter_by(user_id=self.id, sub=sub).one_or_none())
+		return bool(g.db.query(Mod.user_id).filter_by(user_id=self.id, sub=sub).one_or_none())
 
 	@lazy
 	def exiled_from(self, sub):
@@ -324,10 +326,10 @@ class User(Base):
 
 	@lazy
 	def mod_date(self, sub):
-		if self.admin_level >= PERMS['HOLE_GLOBAL_MODERATION']: return 1
-		mod = g.db.query(Mod).filter_by(user_id=self.id, sub=sub).one_or_none()
-		if not mod: return None
-		return mod.created_utc
+		mod_ts = g.db.query(Mod.created_utc).filter_by(user_id=self.id, sub=sub).one_or_none()
+		if mod_ts is None:
+			return None
+		return mod_ts[0]
 
 	@property
 	@lazy
@@ -422,7 +424,7 @@ class User(Base):
 		if not FEATURES['COUNTRY_CLUB']: return True
 		if self.shadowbanned: return False
 		if self.is_suspended_permanently: return False
-		return self.admin_level >= PERMS['VIEW_CLUB'] or self.club_allowed or (self.club_allowed != False and self.truecoins >= DUES)
+		return self.admin_level >= PERMS['VIEW_CLUB'] or self.club_allowed or (self.club_allowed != False and self.truescore >= DUES)
 
 	@lazy
 	def any_block_exists(self, other):
@@ -935,7 +937,7 @@ class User(Base):
 	def can_see_chudrama(self):
 		if self.admin_level >= PERMS['VIEW_CHUDRAMA']: return True
 		if self.client: return True
-		if self.truecoins >= 5000: return True
+		if self.truescore >= 5000: return True
 		if self.agendaposter: return True
 		if self.patron: return True
 		return False

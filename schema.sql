@@ -123,7 +123,8 @@ CREATE TABLE public.submissions (
     sub character varying(25),
     new boolean,
     hole_pinned character varying(30),
-    notify boolean NOT NULL
+    notify boolean NOT NULL,
+    chuddedfor character varying(40)
 );
 
 
@@ -391,7 +392,9 @@ CREATE TABLE public.comments (
     blackjack_result character varying(860),
     treasure_amount character varying(10),
     wordle_result character varying(115),
-    body_ts tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, (body)::text)) STORED
+    body_ts tsvector GENERATED ALWAYS AS (to_tsvector('english'::regconfig, (body)::text)) STORED,
+    casino_game_id integer,
+    chuddedfor character varying(40)
 );
 
 
@@ -953,7 +956,7 @@ CREATE TABLE public.users (
     defaultsortingcomments character varying(15) NOT NULL,
     theme character varying(15) NOT NULL,
     song character varying(50),
-    slurreplacer boolean DEFAULT true NOT NULL,
+    slurreplacer integer DEFAULT 1 NOT NULL,
     shadowbanned character varying(25),
     newtabexternal boolean DEFAULT true NOT NULL,
     customtitleplain character varying(100),
@@ -973,13 +976,11 @@ CREATE TABLE public.users (
     received_award_count integer DEFAULT 0 NOT NULL,
     highlightcomments boolean DEFAULT true NOT NULL,
     nitter boolean,
-    truecoins integer DEFAULT 0 NOT NULL,
+    truescore integer DEFAULT 0 NOT NULL,
     club_allowed boolean,
     frontsize integer DEFAULT 25 NOT NULL,
     coins_spent integer DEFAULT 0 NOT NULL,
     procoins integer DEFAULT 0 NOT NULL,
-    mute boolean,
-    unmutable boolean,
     verifiedcolor character varying(6),
     marseyawarded integer,
     sig character varying(200),
@@ -990,12 +991,8 @@ CREATE TABLE public.users (
     enemies character varying(500),
     enemies_html character varying(2000),
     fp character varying(21),
-    eye boolean,
-    alt boolean,
     longpost integer,
-    unblockable boolean,
     bird integer,
-    fish boolean,
     lootboxes_bought integer DEFAULT 0 NOT NULL,
     progressivestack integer,
     patron_utc integer DEFAULT 0 NOT NULL,
@@ -1006,7 +1003,6 @@ CREATE TABLE public.users (
     currently_held_lottery_tickets integer DEFAULT 0 NOT NULL,
     total_held_lottery_tickets integer DEFAULT 0 NOT NULL,
     total_lottery_winnings integer DEFAULT 0 NOT NULL,
-    offsitementions boolean DEFAULT false NOT NULL,
     last_active integer DEFAULT 0 NOT NULL,
     last_viewed_post_notifs integer NOT NULL,
     pronouns character varying(11) NOT NULL,
@@ -1020,7 +1016,8 @@ CREATE TABLE public.users (
     is_muted boolean DEFAULT false NOT NULL,
     coins_spent_on_hats integer DEFAULT 0 NOT NULL,
     rainbow integer,
-    spider integer
+    spider integer,
+    profanityreplacer integer DEFAULT 1 NOT NULL
 );
 
 
@@ -2150,6 +2147,14 @@ ALTER TABLE ONLY public.userblocks
 
 
 --
+-- Name: comments casino_game_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.comments
+    ADD CONSTRAINT casino_game_fkey FOREIGN KEY (casino_game_id) REFERENCES public.casino_games(id);
+
+
+--
 -- Name: casino_games casino_games_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2680,3 +2685,4 @@ ALTER TABLE ONLY public.comment_option_votes
 --
 -- PostgreSQL database dump complete
 --
+

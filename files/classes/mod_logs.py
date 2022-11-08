@@ -76,8 +76,8 @@ class ModAction(Base):
 		return f"{SITE_FULL}/log/{self.id}"
 
 ACTIONTYPES = {
-	'agendaposter': {
-		"str": 'set chud theme on {self.target_link}', 
+	'chud': {
+		"str": 'chudded {self.target_link}', 
 		"icon": 'fa-snooze', 
 		"color": 'bg-danger'
 	},
@@ -176,8 +176,8 @@ ACTIONTYPES = {
 		"icon": 'fa-dollar-sign', 
 		"color": 'bg-success'
 	},
-	'dump_cache': {
-		"str": 'dumped cache', 
+	'clear_internal_cache': {
+		"str": 'cleared internal cache', 
 		"icon": 'fa-trash-alt', 
 		"color": 'bg-muted'
 	},
@@ -266,9 +266,9 @@ ACTIONTYPES = {
 		"icon": 'fa-thumbtack fa-rotate--45', 
 		"color": 'bg-success'
 	},
-	'purge_cache': {
-		"str": 'purged cache', 
-		"icon": 'fa-memory', 
+	'clear_cloudflare_cache': {
+		"str": 'cleared cloudflare cache', 
+		"icon": 'fa-cloudflare', 
 		"color": 'bg-muted'
 	},
 	'reject_app': {
@@ -316,8 +316,8 @@ ACTIONTYPES = {
 		"icon": 'fa-eye-slash', 
 		"color": 'bg-danger'
 	},
-	'unagendaposter': {
-		"str": 'removed chud theme from {self.target_link}', 
+	'unchud': {
+		"str": 'unchudded {self.target_link}', 
 		"icon": 'fa-snooze', 
 		"color": 'bg-success'
 	},

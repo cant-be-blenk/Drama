@@ -18,6 +18,7 @@ valid_params = [
 	'before',
 	'after',
 	'title',
+	'cc',
 	search_operator_hole,
 ]
 
@@ -47,7 +48,8 @@ def searchposts(v):
 
 	query = request.values.get("q", '').strip()
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
 
 	sort = request.values.get("sort", "new").lower()
 	t = request.values.get('t', 'all').lower()
@@ -140,6 +142,13 @@ def searchposts(v):
 			except: abort(400)
 		posts = posts.filter(Submission.created_utc < before)
 
+	if 'cc' in criteria:
+		cc = criteria['cc'].lower().strip()
+		if cc == 'true': cc = True
+		elif cc == 'false': cc = False
+		else: abort(400)
+		posts = posts.filter(Submission.club == cc)
+
 	posts = apply_time_filter(t, posts, Submission)
 
 	posts = sort_objects(sort, posts, Submission,
@@ -175,7 +184,7 @@ def searchcomments(v):
 	query = request.values.get("q", '').strip()
 
 	try: page = max(1, int(request.values.get("page", 1)))
-	except: page = 1
+	except: abort(400, "Invalid page input!")
 
 	sort = request.values.get("sort", "new").lower()
 	t = request.values.get('t', 'all').lower()
@@ -268,7 +277,9 @@ def searchusers(v):
 
 	query = request.values.get("q", '').strip()
 
-	page = max(1, int(request.values.get("page", 1)))
+	try: page = max(1, int(request.values.get("page", 1)))
+	except: abort(400, "Invalid page input!")
+
 	sort = request.values.get("sort", "new").lower()
 	t = request.values.get('t', 'all').lower()
 	term=query.lstrip('@')

@@ -34,7 +34,7 @@
 </div>
 <div class="body w-lg-100">
 	<div class="custom-control custom-switch">
-		<input autocomplete="off" type="checkbox" class="custom-control-input" id="stealth" name="stealth" {% if sub.stealth %}checked{% endif %} onchange="postToast(this,'/h/{{sub}}/stealth');">
+		<input autocomplete="off" type="checkbox" class="custom-control-input" id="stealth" name="stealth" {% if sub.stealth %}checked{% endif %} onchange="postToastSwitch(this,'/h/{{sub}}/stealth');">
 		<label class="custom-control-label" for="stealth"></label>
 	</div>
 	<span class="text-small text-muted">Make this hole blocked by default (users can visit it to unblock it).</span>
@@ -67,7 +67,7 @@
 
 			</div>
 
-			<div class="text-small text-muted mt-3">JPG, PNG, GIF files are supported. Max file size is {% if v and v.patron %}16{% else %}8{% endif %} MB.</div>
+			<div class="text-small text-muted mt-3">All image files are supported. Max file size is {% if v and v.patron %}16{% else %}8{% endif %} MB.</div>
 
 		</div>
 
@@ -102,7 +102,7 @@
 
 			</div>
 
-			<div class="text-small text-muted mt-3">JPG, PNG, GIF files are supported. Max file size is {% if v and v.patron %}16{% else %}8{% endif %} MB.</div>
+			<div class="text-small text-muted mt-3">All image files are supported. Max file size is {% if v and v.patron %}16{% else %}8{% endif %} MB.</div>
 
 		</div>
 
@@ -138,7 +138,7 @@
 
 			</div>
 
-			<div class="text-small text-muted mt-3">JPG, PNG, GIF files are supported. Max file size is {% if v and v.patron %}16{% else %}8{% endif %} MB.</div>
+			<div class="text-small text-muted mt-3">All image files are supported. Max file size is {% if v and v.patron %}16{% else %}8{% endif %} MB.</div>
 
 		</div>
 

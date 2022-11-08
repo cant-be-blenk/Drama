@@ -43,6 +43,7 @@ class Comment(Base):
 	is_banned = Column(Boolean, default=False)
 	ghost = Column(Boolean, default=False)
 	bannedfor = Column(String)
+	chuddedfor = Column(String)
 	distinguish_level = Column(Integer, default=0)
 	deleted_utc = Column(Integer, default=0)
 	is_approved = Column(Integer, ForeignKey("users.id"))
@@ -89,7 +90,7 @@ class Comment(Base):
 
 	@lazy
 	def can_see(self, v):
-		if SITE != 'rdrama.net': return True
+		if not SITE.startswith('rdrama.'): return True
 		if not self.parent_submission: return True
 		if self.post.sub != 'chudrama': return True
 		if v:

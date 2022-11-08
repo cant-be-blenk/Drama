@@ -45,7 +45,7 @@ def vote_info_get(v, link):
 def vote_post_comment(target_id, new, v, cls, vote_cls):
 	if new == "-1" and DISABLE_DOWNVOTES: abort(403)
 	if new not in ["-1", "0", "1"]: abort(400)
-	if v.client and v.id != BBBB_ID: abort(403)
+	if v.client and v.id not in PRIVILEGED_USER_BOTS: abort(403)
 	new = int(new)
 	target = None
 	if cls == Submission:
@@ -80,14 +80,14 @@ def vote_post_comment(target_id, new, v, cls, vote_cls):
 	if existing:
 		if existing.vote_type == 0 and new != 0:
 			target.author.coins += coin_value
-			target.author.truecoins += coin_delta
+			target.author.truescore += coin_delta
 			g.db.add(target.author)
 			existing.vote_type = new
 			existing.coins = coin_value
 			g.db.add(existing)
 		elif existing.vote_type != 0 and new == 0:
-			target.author.charge_account('coins', existing.coins)
-			target.author.truecoins -= coin_delta
+			target.author.charge_account('coins', existing.coins, should_check_balance=False)
+			target.author.truescore -= coin_delta
 			g.db.add(target.author)
 			g.db.delete(existing)
 		else:
@@ -95,7 +95,7 @@ def vote_post_comment(target_id, new, v, cls, vote_cls):
 			g.db.add(existing)
 	elif new != 0:
 		target.author.coins += coin_value
-		target.author.truecoins += coin_delta
+		target.author.truescore += coin_delta
 		g.db.add(target.author)
 
 		real = new != 1 or v.is_votes_real
@@ -137,10 +137,16 @@ def vote_post_comment(target_id, new, v, cls, vote_cls):
 
 	target.upvotes = get_vote_count(1, False)
 	target.downvotes = get_vote_count(-1, False)
-	target.realupvotes = get_vote_count(0, True) # first arg is ignored here
 
-	if target.author.progressivestack or (cls == Submission and (target.sub in ('space', 'istory', 'dinos', 'furry', 'anime') or target.domain.endswith('.win') or target.domain in BOOSTED_SITES)):
-		target.realupvotes *= 2
+	if SITE_NAME == 'rDrama':
+		target.realupvotes = get_vote_count(0, True) # first arg is ignored here
+
+		if target.author.progressivestack or (cls == Submission and (target.domain.endswith('.win') or target.domain in BOOSTED_SITES or len(target.body) > 5000 or target.sub == 'masterbaiters')):
+			target.realupvotes *= 2
+
+		if cls == Submission and target.sub and target.sub not in ('space', 'istory', 'dinos', 'furry', 'anime', 'slackernews', 'gaybros', 'againsthateholes', 'femboy'):
+			target.realupvotes = int(target.realupvotes * 0.7)
+
 	g.db.add(target)
 	return "", 204
 

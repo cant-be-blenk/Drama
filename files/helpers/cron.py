@@ -4,7 +4,7 @@ from files.helpers.const import *
 from files.helpers.alerts import send_repeatable_notification
 from files.helpers.roulette import spin_roulette_wheel
 from files.helpers.get import *
-from files.helpers.actions import *
+from files.helpers.useractions import *
 from files.classes import *
 from files.__main__ import cache
 
@@ -95,7 +95,8 @@ def sub_inactive_purge_task():
 		+ g.db.query(Exile).filter(Exile.sub.in_(names)).all() \
 		+ g.db.query(SubBlock).filter(SubBlock.sub.in_(names)).all() \
 		+ g.db.query(SubJoin).filter(SubJoin.sub.in_(names)).all() \
-		+ g.db.query(SubSubscription).filter(SubSubscription.sub.in_(names)).all()
+		+ g.db.query(SubSubscription).filter(SubSubscription.sub.in_(names)).all() \
+		+ g.db.query(SubAction).filter(SubAction.sub.in_(names)).all()
 
 	for x in to_delete:
 		g.db.delete(x)
@@ -115,13 +116,37 @@ def give_monthly_marseybux_task():
 
 	emails = [x['email'] for x in requests.get(f'https://api.gumroad.com/v2/products/{GUMROAD_ID}/subscribers', data=data, timeout=5).json()["subscribers"]]
 
+	def give_procoins(u):
+		procoins = procoins_li[u.patron]
+		u.procoins += procoins
+		send_repeatable_notification(u.id, f"@AutoJanny has given you {procoins} Marseybux for the month of {month}! You can use them to buy awards in the [shop](/shop).")
+
+	for badge in g.db.query(Badge).filter(Badge.badge_id > 20, Badge.badge_id < 28).all():
+		g.db.delete(badge)
+
 	for u in g.db.query(User).filter(User.patron > 0, User.patron_utc == 0).all():
 		g.db.add(u)
-		if u.admin_level or u.id in GUMROAD_MESSY or (u.email and u.email.lower() in emails):
-			procoins = procoins_li[u.patron]
-			u.procoins += procoins
-			send_repeatable_notification(u.id, f"@AutoJanny has given you {procoins} Marseybux for the month of {month}! You can use them to buy awards in the [shop](/shop).")
-		else: u.patron = 0
+		if u.admin_level or u.id in GUMROAD_MESSY:
+			give_procoins(u)
+		elif u.email and u.is_activated and u.email.lower() in emails:
+			data = {'access_token': GUMROAD_TOKEN, 'email': u.email}
+			try:
+				response = requests.get('https://api.gumroad.com/v2/sales', data=data, timeout=5).json()["sales"]
+			except:
+				print(f'Marseybux monthly granting failed for @{u.username}', flush=True)
+				u.patron = 0
+				continue
+
+			if len(response) == 0:
+				u.patron = 0
+				continue
+			response = [x for x in response if x['variants_and_quantity']][0]
+			tier = tiers[response["variants_and_quantity"]]
+			u.patron = tier
+			badge_grant(badge_id=20+tier, user=u, notify=False)
+			give_procoins(u)
+		else:
+			u.patron = 0
 
 	ma = ModAction(
 		kind="monthly",

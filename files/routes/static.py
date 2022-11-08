@@ -22,7 +22,7 @@ def rdrama(id, title):
 @app.get("/marseys")
 @auth_required
 def marseys(v):
-	if SITE == 'rdrama.net':
+	if SITE.startswith('rdrama.'):
 		marseys = g.db.query(Marsey, User).join(User, Marsey.author_id == User.id).filter(Marsey.submitter_id==None)
 		sort = request.values.get("sort", "usage")
 		if sort == "usage":
@@ -34,14 +34,10 @@ def marseys(v):
 
 		original = os.listdir("/asset_submissions/marseys/original")
 		for marsey, user in marseys:
-			if f'{marsey.name}.png' in original:
-				marsey.og = f'{marsey.name}.png'
-			elif f'{marsey.name}.webp' in original:
-				marsey.og = f'{marsey.name}.webp'
-			elif f'{marsey.name}.gif' in original:
-				marsey.og = f'{marsey.name}.gif'
-			elif f'{marsey.name}.jpeg' in original:
-				marsey.og = f'{marsey.name}.jpeg'
+			for x in IMAGE_FORMATS:
+				if f'{marsey.name}.{x}' in original:
+					marsey.og = f'{marsey.name}.{x}'
+					break
 	else:
 		marseys = g.db.query(Marsey).filter(Marsey.submitter_id==None).order_by(Marsey.count.desc())
 
@@ -56,7 +52,7 @@ def marsey_list():
 	if EMOJI_MARSEYS:
 		emojis = [{
 			"name": emoji.name,
-			"author": author if SITE == 'rdrama.net' or author == "anton-d" else None,
+			"author": author if SITE.startswith('rdrama.') or author == "anton-d" else None,
 			# yikes, I don't really like this DB schema. Next time be better
 			"tags": emoji.tags.split(" ") + [emoji.name[len("marsey"):] \
 						if emoji.name.startswith("marsey") else emoji.name],
@@ -117,9 +113,9 @@ def patrons(v):
 @auth_required
 def admins(v):
 	if v.admin_level >= PERMS['VIEW_SORTED_ADMIN_LIST']:
-		admins = g.db.query(User).filter(User.admin_level>1).order_by(User.truecoins.desc()).all()
-		admins += g.db.query(User).filter(User.admin_level==1).order_by(User.truecoins.desc()).all()
-	else: admins = g.db.query(User).filter(User.admin_level>0).order_by(User.truecoins.desc()).all()
+		admins = g.db.query(User).filter(User.admin_level>1).order_by(User.truescore.desc()).all()
+		admins += g.db.query(User).filter(User.admin_level==1).order_by(User.truescore.desc()).all()
+	else: admins = g.db.query(User).filter(User.admin_level>0).order_by(User.truescore.desc()).all()
 	return render_template("admins.html", v=v, admins=admins)
 
 
@@ -164,7 +160,7 @@ def log(v):
 	actions=actions[:PAGE_SIZE]
 	admins = [x[0] for x in g.db.query(User.username).filter(User.admin_level >= PERMS['ADMIN_MOP_VISIBLE']).order_by(User.username).all()]
 
-	return render_template("log.html", v=v, admins=admins, types=types, admin=admin, type=kind, actions=actions, next_exists=next_exists, page=page)
+	return render_template("log.html", v=v, admins=admins, types=types, admin=admin, type=kind, actions=actions, next_exists=next_exists, page=page, single_user_url='admin')
 
 @app.get("/log/<id>")
 @auth_required
@@ -181,7 +177,7 @@ def log_item(id, v):
 	if v and v.admin_level >= PERMS['USER_SHADOWBAN']: types = ACTIONTYPES
 	else: types = ACTIONTYPES2
 
-	return render_template("log.html", v=v, actions=[action], next_exists=False, page=1, action=action, admins=admins, types=types)
+	return render_template("log.html", v=v, actions=[action], next_exists=False, page=1, action=action, admins=admins, types=types, single_user_url='admin')
 
 @app.get("/directory")
 @auth_required
@@ -348,7 +344,10 @@ def blocks(v):
 @app.get("/banned")
 @auth_required
 def banned(v):
-	users = g.db.query(User).filter(User.is_banned > 0, User.unban_utc == 0).all()
+	users = g.db.query(User).filter(User.is_banned > 0, User.unban_utc == 0)
+	if not v.can_see_shadowbanned:
+		users = users.filter(User.shadowbanned == None)
+	users = users.all()
 	return render_template("banned.html", v=v, users=users)
 
 @app.get("/formatting")
@@ -360,15 +359,6 @@ def formatting(v):
 def serviceworker():
 	with open("files/assets/js/service-worker.js", "r", encoding="utf-8") as f:
 		return Response(f.read(), mimetype='application/javascript')
-
-@app.get("/settings/security")
-@auth_required
-def settings_security(v):
-	return render_template("settings_security.html",
-						v=v,
-						mfa_secret=pyotp.random_base32() if not v.mfa_secret else None
-						)
-
 
 @app.post("/dismiss_mobile_tip")
 def dismiss_mobile_tip():

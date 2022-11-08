@@ -1,17 +1,3 @@
-function isShopConfirmation(t) {
-	return t.id.startsWith('buy1-') || t.id.startsWith('buy2-');
-}
-
-function prePostToastNonShopActions(t, url, button1, button2, className) {
-	let isShopConfirm = isShopConfirmation(t);
-
-	if (!isShopConfirm)
-	{
-		t.disabled = true;
-		t.classList.add("disabled");
-	}
-}
-
 function getMessageFromJsonData(success, json) {
 	let message = success ? "Success!" : "Error, please try again later";
 	let key = success ? "message" : "error";
@@ -37,43 +23,6 @@ function showToast(success, message, isToastTwo=false) {
 	bootstrap.Toast.getOrCreateInstance(document.getElementById(element)).show();
 }
 
-function postToastLoad(xhr, className, button1, button2, extraActionsOnSuccess, extraActionsOnError) {
-	let data
-	try {
-		data = JSON.parse(xhr.response)
-	}
-	catch (e) {
-		console.log(e)
-	}
-	success = xhr.status >= 200 && xhr.status < 300;
-	showToast(success, getMessageFromJsonData(success, data));
-	if (success) {
-		if (button1)
-		{
-			if (typeof(button1) == 'boolean') {
-				location.reload()
-			} else {
-				document.getElementById(button1).classList.toggle(className);
-				document.getElementById(button2).classList.toggle(className);
-			}
-		}
-		if (extraActionsOnSuccess) extraActionsOnSuccess(xhr);
-	} else {
-		if (extraActionsOnError) extraActionsOnError(xhr);
-	}
-}
-
-function postPostToastNonShopActions(t, url, button1, button2, className) {
-	let isShopConfirm = isShopConfirmation(t);
-	if (!isShopConfirm)
-	{
-		setTimeout(() => {
-			t.disabled = false;
-			t.classList.remove("disabled");
-		}, 2000);
-	}
-}
-
 function createXhrWithFormKey(url, method="POST", form=new FormData()) {
 	const xhr = new XMLHttpRequest();
 	xhr.open(method, url);
@@ -83,29 +32,27 @@ function createXhrWithFormKey(url, method="POST", form=new FormData()) {
 	return [xhr, form]; // hacky but less stupid than what we were doing before
 }
 
-function postToast(t, url, button1, button2, className, extraActions, extraActionsError) {
-	prePostToastNonShopActions(t, url, button1, button2, className);
-	const xhr = createXhrWithFormKey(url);
-	xhr[0].onload = function() {
-		postToastLoad(xhr[0], className, button1, button2, extraActions, extraActionsError)
-		postPostToastNonShopActions(t, url, button1, button2, className)
-	};
-	xhr[0].send(xhr[1]);
-}
+function postToast(t, url, data, extraActionsOnSuccess, method="POST") {
+	const isShopConfirm = t.id.startsWith('buy1-') || t.id.startsWith('buy2-') || t.id.startsWith('giveaward')
 
-function postToast_callback(url, data, callback) {
+	if (!isShopConfirm)
+	{
+		t.disabled = true;
+		t.classList.add("disabled");
+	}
+
 	let form = new FormData();
 	if(typeof data === 'object' && data !== null) {
 		for(let k of Object.keys(data)) {
 			form.append(k, data[k]);
 		}
 	}
-	const xhr = createXhrWithFormKey(url, "POST", form);
+	const xhr = createXhrWithFormKey(url, method, form);
 	xhr[0].onload = function() {
 		let result
-		if (callback) result = callback(xhr[0]);
 		let message;
 		let success = xhr[0].status >= 200 && xhr[0].status < 300;
+		if (success && extraActionsOnSuccess) result = extraActionsOnSuccess(xhr[0]);
 		if (typeof result == "string") {
 			message = result;
 		} else {
@@ -114,9 +61,50 @@ function postToast_callback(url, data, callback) {
 		let oldToast = bootstrap.Toast.getOrCreateInstance(document.getElementById('toast-post-' + (success ? 'error': 'success'))); // intentionally reversed here: this is the old toast
 		oldToast.hide();
 		showToast(success, message);
+		if (!isShopConfirm) {
+			t.disabled = false;
+			t.classList.remove("disabled");			
+		}
 		return success;
 	};
 	xhr[0].send(xhr[1]);
+
+	if (!isShopConfirm)
+	{
+		setTimeout(() => {
+			t.disabled = false;
+			t.classList.remove("disabled");
+		}, 2000);
+	}
+}
+
+function postToastReload(t, url, method="POST") {
+	postToast(t, url,
+		{
+		},
+		() => {
+			location.reload()
+		}
+	, method);
+}
+
+function postToastSwitch(t, url, button1, button2, cls, extraActionsOnSuccess, method="POST") {
+	postToast(t, url,
+		{
+		},
+		(xhr) => {
+			if (button1)
+			{
+				if (typeof(button1) == 'boolean') {
+					location.reload()
+				} else {
+					document.getElementById(button1).classList.toggle(cls);
+					document.getElementById(button2).classList.toggle(cls);
+				}
+			}
+			if (extraActionsOnSuccess) extraActionsOnSuccess(xhr);
+		}
+	, method);
 }
 
 if (window.location.pathname != '/submit')
@@ -162,7 +150,7 @@ function disable(t) {
 	}, 2000);
 }
 
-function autoExpand (field) {
+function autoExpand(field) {
 	xpos=window.scrollX;
 	ypos=window.scrollY;
 
@@ -238,7 +226,7 @@ function formkey() {
 function expandDesktopImage(url) {
 	const e = this.event
 	if(e.ctrlKey || e.metaKey || e.shiftKey || e.altKey)
-		return true;
+		return;
 	e.preventDefault();
 	if (!url)
 	{
@@ -314,7 +302,7 @@ function changename(s1,s2) {
 	}
 	let filename = '';
 	for (const e of files) {
-		filename += e.name.substr(0, 20) + ', ';
+		filename += e.name.substr(0, 22) + ', ';
 	}
 	document.getElementById(s1).innerHTML = escapeHTML(filename.slice(0, -2));
 }
@@ -380,4 +368,51 @@ function prepare_to_pause(audio) {
 			if (!audio.paused) audio.pause();
 		});
 	}
+}
+
+function sendFormXHR(e, extraActionsOnSuccess) {
+	const form = e.target;
+	const xhr = new XMLHttpRequest();
+	e.preventDefault();
+
+	formData = new FormData(form);
+
+	formData.append("formkey", formkey());
+	actionPath = form.getAttribute("action");
+
+	xhr.open("POST", actionPath);
+	xhr.setRequestHeader('xhr', 'xhr');
+
+	xhr.onload = function() {
+		if (xhr.status >= 200 && xhr.status < 300) {
+			let data = JSON.parse(xhr.response);
+			showToast(true, getMessageFromJsonData(true, data));
+			if (extraActionsOnSuccess) extraActionsOnSuccess(xhr);
+		} else {
+			document.getElementById('toast-post-error-text').innerText = "Error, please try again later."
+			try {
+				let data=JSON.parse(xhr.response);
+				var myToast = bootstrap.Toast.getOrCreateInstance(document.getElementById('toast-post-error'));
+				myToast.show();
+				document.getElementById('toast-post-error-text').innerText = data["error"];
+				if (data && data["details"]) document.getElementById('toast-post-error-text').innerText = data["details"];
+			} catch(e) {
+				var myToast = bootstrap.Toast.getOrCreateInstance(document.getElementById('toast-post-success'));
+				myToast.hide();
+				var myToast = bootstrap.Toast.getOrCreateInstance(document.getElementById('toast-post-error'));
+				myToast.show();
+			}
+		}
+	};
+
+	xhr.send(formData);
+}
+
+function sendFormXHRSwitch(e) {
+	sendFormXHR(e,
+		() => {
+			e.target.previousElementSibling.classList.remove('d-none');
+			e.target.classList.add('d-none');
+		}
+	)
 }

@@ -14,6 +14,28 @@ import signal
 import time
 import requests
 
+TLDS = ( # Original gTLDs and ccTLDs
+	'ac','ad','ae','aero','af','ag','ai','al','am','an','ao','aq','ar','arpa','as','asia','at',
+	'au','aw','ax','az','ba','bb','bd','be','bf','bg','bh','bi','biz','bj','bm','bn','bo','br',
+	'bs','bt','bv','bw','by','bz','ca','cafe','cat','cc','cd','cf','cg','ch','ci','ck','cl',
+	'cm','cn','co','com','coop','cr','cu','cv','cx','cy','cz','de','dj','dk','dm','do','dz','ec',
+	'edu','ee','eg','er','es','et','eu','fi','fj','fk','fm','fo','fr','ga','gb','gd','ge','gf',
+	'gg','gh','gi','gl','gm','gn','gov','gp','gq','gr','gs','gt','gu','gw','gy','hk','hm','hn',
+	'hr','ht','hu','id','ie','il','im','in','info','int','io','iq','ir','is','it','je','jm','jo',
+	'jobs','jp','ke','kg','kh','ki','km','kn','kp','kr','kw','ky','kz','la','lb','lc','li','lk',
+	'lr','ls','lt','lu','lv','ly','ma','mc','md','me','mg','mh','mil','mk','ml','mm','mn','mo',
+	'mobi','mp','mq','mr','ms','mt','mu','museum','mv','mw','mx','my','mz','na','name',
+	'nc','ne','net','nf','ng','ni','nl','no','np','nr','nu','nz','om','org','pa','pe','pf','pg',
+	'ph','pk','pl','pm','pn','post','pr','pro','ps','pt','pw','py','qa','re','ro','rs','ru','rw',
+	'sa','sb','sc','sd','se','sg','sh','si','sj','sk','sl','sm','sn','so','social','sr','ss','st',
+	'su','sv','sx','sy','sz','tc','td','tel','tf','tg','th','tj','tk','tl','tm','tn','to','tp',
+	'tr','travel','tt','tv','tw','tz','ua','ug','uk','us','uy','uz','va','vc','ve','vg','vi','vn',
+	'vu','wf','ws','xn','xxx','ye','yt','yu','za','zm','zw',
+	# New gTLDs
+	'app','cleaning','club','dev','farm','florist','fun','gay','lgbt','life','lol',
+	'moe','mom','monster','new','news','online','pics','press','pub','site',
+	'vip','win','world','wtf','xyz',
+	)
 
 allowed_tags = ('b','blockquote','br','code','del','em','h1','h2','h3','h4','h5','h6','hr','i',
 	'li','ol','p','pre','strong','sub','sup','table','tbody','th','thead','td','tr','ul',
@@ -76,7 +98,7 @@ def allowed_attributes(tag, name, value):
 		return False
 
 
-def build_url_re(protocols):
+def build_url_re(tlds, protocols):
 	"""Builds the url regex used by linkifier
 
 	If you want a different set of tlds or allowed protocols, pass those in
@@ -92,18 +114,20 @@ def build_url_re(protocols):
 	return re.compile(
 		r"""\(*# Match any opening parentheses.
 		\b(?<![@.])(?:(?:{0}):/{{0,3}}(?:(?:\w+:)?\w+@)?)?# http://
-		([\w-]+\.)+(?:[A-Za-z]{{2,20}})(?:\:[0-9]+)?(?!\.\w)\b# xx.yy.tld(:##)?
+		([\w-]+\.)+(?:{1})(?:\:[0-9]+)?(?!\.\w)\b# xx.yy.tld(:##)?
 		(?:[/?][^#\s\{{\}}\|\\\^\[\]`<>"]*)?
 			# /path/zz (excluding "unsafe" chars from RFC 1738,
 			# except for ~, which happens in practice)
 		(?:\#[^#\s\|\\\^\[\]`<>"]*)?
 			# #hash (excluding "unsafe" chars from RFC 1738,
 			# except for ~, which happens in practice)
-		""".format("|".join(sorted(protocols))),
+		""".format(
+			"|".join(sorted(protocols)), "|".join(sorted(tlds))
+		),
 		re.IGNORECASE | re.VERBOSE | re.UNICODE,
 	)
 
-url_re = build_url_re(protocols=['http', 'https'])
+url_re = build_url_re(tlds=TLDS, protocols=['http', 'https'])
 
 def callback(attrs, new=False):
 	if (None, "href") not in attrs:
@@ -186,18 +210,26 @@ def with_sigalrm_timeout(timeout: int):
 	return inner
 
 
-def sanitize_raw_title(sanitized):
+def sanitize_raw_title(sanitized:Optional[str]) -> str:
 	if not sanitized: return ""
 	sanitized = sanitized.replace('\u200e','').replace('\u200b','').replace("\ufeff", "").replace("\r","").replace("\n", "")
 	sanitized = sanitized.strip()
 	return sanitized[:POST_TITLE_LENGTH_LIMIT]
 
-def sanitize_raw_body(sanitized, is_post):
+def sanitize_raw_body(sanitized:Optional[str], is_post:bool) -> str:
 	if not sanitized: return ""
 	sanitized = html_comment_regex.sub('', sanitized)
 	sanitized = sanitized.replace('\u200e','').replace('\u200b','').replace("\ufeff", "").replace("\r\n", "\n")
 	sanitized = sanitized.strip()
 	return sanitized[:POST_BODY_LENGTH_LIMIT if is_post else COMMENT_BODY_LENGTH_LIMIT]
+
+
+def sanitize_settings_text(sanitized:Optional[str], max_length:Optional[int]=None) -> str:
+	if not sanitized: return ""
+	sanitized = sanitized.replace('\u200e','').replace('\u200b','').replace("\ufeff", "").replace("\r", "").replace("\n","")
+	sanitized = sanitized.strip()
+	if max_length: sanitized = sanitized[:max_length]
+	return sanitized
 
 
 @with_sigalrm_timeout(5)
@@ -450,7 +482,7 @@ def normalize_url(url):
 			 .replace("https://nitter.42l.fr/", "https://twitter.com/") \
 			 .replace("https://nitter.lacontrevoie.fr/", "https://twitter.com/")
 
-	url = imgur_regex.sub(r'\1_d.webp?maxwidth=9999&fidelity=high', url)
+	url = imgur_regex.sub(r'\1_d.webp?maxwidth=9999&fidelity=grand', url)
 	url = giphy_regex.sub(r'\1.webp', url)
 
 	return url
