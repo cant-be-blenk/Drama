@@ -1,9 +1,9 @@
-from files.__main__ import app, db_session, Base
+from files.__main__ import app, db_session, Base, engine
 from flask import g
 from sqlalchemy import *
 from sqlalchemy.orm import relationship
 
-from events import EVENT_ACTIVE, loadModule
+from events import EVENT_ACTIVE, load_module
 
 class Event(Base):
 
@@ -16,13 +16,14 @@ class Event(Base):
 	def __repr__(self):
 		return f"<Event(id={self.id})>"
 		
-def buildTable():
+def build_table():
 	if not EVENT_ACTIVE: return None
 	
-	print("building event table...")
-	with app.app_context():
-		g.db = db_session()
-		loadModule("conf")
+	if not inspect(engine).has_table("event", schema="public"):
+		print("building event table...")
+		with app.app_context():
+			g.db = db_session()
+			load_module("conf")
 
-		Event.__table__.create(bind=g.db.bind, checkfirst=True)
-		g.db.commit()
+			Event.__table__.create(bind=g.db.bind, checkfirst=True)
+			g.db.commit()

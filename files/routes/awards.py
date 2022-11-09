@@ -379,7 +379,7 @@ def award_thing(v, thing_type, id):
 		if author.spider: author.spider += 86400
 		else: author.spider = int(time.time()) + 86400
 		badge_grant(user=author, badge_id=179, notify=False)
-	elif event:
+	elif EVENT_ACTIVE:
 		if kind in event.EVENT_AWARDS:
 			event_routes.event_award(v, kind, author)
 

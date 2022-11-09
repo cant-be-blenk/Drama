@@ -607,7 +607,8 @@ AWARDS = {
 		"icon": "fas fa-circle",
 		"color": "text-white",
 		"price": 0,
-		"deflectable": False
+		"deflectable": False,
+		"cosmetic": False
 	},
 	### Deprecated
 	"ghost": {

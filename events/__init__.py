@@ -4,14 +4,14 @@ from importlib import import_module
 
 from events.conf import *
 
-def loadModule(module):
+def load_module(module):
 	if not EVENT_ACTIVE: return None
 	try: return import_module("events." + EVENT_NAME + "." + module)
 	except Exception as e: 
 		print(e)
 		return None
 
-def linkAssets():
+def link_assets():
 	if not EVENT_ACTIVE: return None
 	root = "/rDrama"
 	assets = ["assets/css", "assets/js", "assets/fonts",\
