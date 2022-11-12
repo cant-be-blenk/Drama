@@ -25,11 +25,12 @@
 		{{cf_2fa_verify()}}
 	{% endif %}
 	{% if 'chat' in request.path %}
-		{% if SITE == 'localhost' %}
-			<link rel="stylesheet" href="https://rdrama.net/assets/css/chat_done.css">
-		{% else %}
-			<link rel="stylesheet" href="{{'css/chat_done.css' | asset}}">
-		{% endif %}
+		##{% if SITE == 'localhost' %}
+		##	<link rel="stylesheet" href="https://rdrama.net/assets/css/chat_done.css">
+		##{% else %}
+		##	<link rel="stylesheet" href="{{'css/chat_done.css' | asset}}">
+		##{% endif %}
+		<link rel="stylesheet" href="/assets/css/chat.css">
 	{% endif %}
 </head>
 {% endmacro %}
