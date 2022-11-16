@@ -26,24 +26,7 @@
 {% if SITE_NAME == 'PCM' %}
 	{% include "awards_PCM.html" %}
 {% endif %}
-
-{% if not v_forbid_deleted -%}
-	<meta property="og:image" content="{% if p.is_image %}{{p.realurl(v)}}{% elif p.has_thumb%}{{p.thumb_url}}{% else %}{{SITE_FULL}}{{'site_preview.webp' | asset_siteimg}}{% endif %}">
-	{% if p.is_video %}
-		<meta property="og:video" content="{{p.realurl(v)}}">
-	{% elif p.is_audio %}
-		<meta property="og:audio" content="{{p.realurl(v)}}">
-	{% endif %}
-	<meta name="twitter:image" content="{% if p.is_image %}{{p.realurl(v)}}{% elif p.has_thumb%}{{p.thumb_url}}{% else %}{{SITE_FULL}}{{'site_preview.webp' | asset_siteimg}}{% endif %}">
-{% endif %}
-
-
-{% if comment_info and not comment_info.is_banned and not comment_info.deleted_utc %}
-	<title>{{'@'+comment_info.author_name}} comments on "{{p.plaintitle(v)}} - {{SITE_NAME}}"</title>
-	{{ macros.post_meta(comment_info) }}
-{% else %}
-	{{ macros.post_meta(p) }}
-{%- endif %}
+{{ html_head.page_meta() }}
 {% endblock %}
 
 {% block pagetype %}thread{% endblock %}
