@@ -2,9 +2,7 @@
 {# submission.py does a lot of stupid stuff with the title and we don't want to override that #}
 {# remember, this is very temporary #}
 <head>
-	{% if js %}
-		{{javascript()}}
-	{% endif %}
+	{{ javascript() if js}}
 	{{meta_tags_1(csp, author)}}
 	{{stylesheets(include_user_css, extra_css)}}
 	{% if title2 %}
@@ -47,6 +45,94 @@
 {% macro javascript() %}
 	<script defer src="{{'js/bootstrap.js' | asset}}"></script>
 	<script defer src="{{'js/core.js' | asset}}"></script>
+{% endmacro %}
+
+{% macro page_meta() %}
+	{% set title = SITE_NAME %}
+
+	{% if 'post/' in request.path %}
+		{% set title = [p.plaintitle(v), ' - ', title] | join %}
+
+		{% if not v_forbid_deleted -%}
+			{% set image = p.thumb_url if p.has_thumb %}
+			{% set image = p.realurl(v) if p.is_image %}
+			{% set video = p.realurl(v) if p.is_video %}
+			{% set audio = p.realurl(v) if p.is_audio %}
+		{% endif %}
+
+		{% if comment_info and not comment_info.is_banned and not comment_info.deleted_utc %}
+			{% set p, title = comment_info, ['@', comment_info.author_name, ' comments on ',
+			'"', title, '"'] | join %}
+		{% endif %}
+
+		{% set author, description, a_author, published, modified, url =
+		'@'+p.author_name, p.plainbody(v), '@'+p.author_name,
+		p.created_datetime, p.edited_string, p.permalink %}
+
+	{% elif '@' in request.path %}
+		{% set author, a_author, published, url, title, image, section =
+		'@'+u.username, '@'+u.username, u.created_date,
+		u.url, u.username, u.banner_url
+		[u.username, "'s profile - ", SITE_NAME] | join %}
+
+		{% set description %}
+			"{{u.coins}} coins - Joined {{u.created_date}} -
+			{% if u.stored_subscriber_count >=1 and not u.is_private %}
+				{{u.stored_subscriber_count}} Followers -
+			{% endif %}
+			{% if not u.is_private %}
+				{{0 if u.shadowbanned else u.post_count}}
+					Posts -
+				{{0 if u.shadowbanned else u.comment_count}}
+					Comments
+			{% endif %}
+			{% if u.bio %}
+				- {{u.bio}}
+			{% endif %}"
+		{% endset %}
+
+	{% elif sub %}
+		{% set title, description =
+		'/h/'+sub, sub.sidebar if sub.sidebar %}
+	{% endif %}
+
+	<title>{{title}}</title>
+	<link rel="icon" type="image/webp" href="{{'icon.webp' | asset_siteimg}}">
+	{{ meta_tags(csp, title, author, description, image,
+	video, audio, a_author, published, modified, section, url) }}
+{% endmacro %}
+
+{% macro meta_tags(csp, title, author, description, image, video, audio, a_author, published, modified, section, url ) %}
+	<meta charset="utf-8">
+	<meta http-equiv="Content-Security-Policy" content="{{csp | default(CONTENT_SECURITY_POLICY_DEFAULT, true) | safe}}">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<meta name="thumbnail" content="{{'site_preview.webp' | asset_siteimg}}">
+	<meta name="description" content="{{DESCRIPTION}}">
+
+	<meta property="og:type" content="article">
+	<meta property="og:site_name" content="{{SITE}}">
+	<meta property="og:url" content="{{request.full_path}}">
+
+	<meta property="og:title" content="{{title}}">
+	<meta property="og:author" name="author" content="{{author | default(SITE_FULL, true)}}">
+	<meta property="og:description" name="description" content="{{description}}">
+	<meta property="og:image" content="{{image | default('site_preview.webp' | asset_siteimg)}}">
+	<meta property="og:video" content="{{video}}">
+	<meta property="og:audio" content="{{audio}}">
+
+	<meta property="og:article:author" content="{{a_author}}">
+	<meta property="og:article:published_time" content="{{published}}">
+	<meta property="og:article:modified_time" content="{{modified}}">
+	<meta property="og:article:section" content="{{section}}">
+
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:site" content="{{SITE_FULL}}">
+
+	<meta name="twitter:title" content="{{title}}">
+	<meta name="twitter:creator" content="{{author}}">
+	<meta name="twitter:description" content="{{description}}">
+	<meta name="twitter:image" content="{{image | default('site_preview.webp' | asset_siteimg)}}">
+	<meta name="twitter:url" content="{{url}}">
 {% endmacro %}
 
 {% macro meta_tags_1(csp, author, exclude_author) %}
