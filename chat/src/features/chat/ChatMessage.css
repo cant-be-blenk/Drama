@@ -1,6 +1,8 @@
 .ChatMessage {
   position: relative;
   padding-right: 1.5rem;
+  overflow: hidden;
+  max-height: 300px;
 }
 
 .ChatMessage__isDm {

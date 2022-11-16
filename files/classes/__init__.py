@@ -1,3 +1,11 @@
+# load sqlalchemy's declarative base...
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+
+# then load our required constants...
+from files.helpers.const import FEATURES
+
+# then load all of our classes :)
 from .alts import *
 from .clients import *
 from .comment import *
@@ -10,12 +18,9 @@ from .submission import *
 from .votes import *
 from .domains import *
 from .subscriptions import *
-from files.__main__ import app
 from .mod_logs import *
 from .award import *
-from .sub_block import *
-from .sub_subscription import *
-from .sub_join import *
+from .sub_relationship import *
 from .saves import *
 from .views import *
 from .notifications import *
@@ -25,7 +30,8 @@ from .casino_game import *
 from .hats import *
 from .marsey import *
 from .transactions import *
-from .streamers import *
 from .sub_logs import *
 from .media import *
 from .events import *
+if FEATURES['STREAMERS']:
+    from .streamers import *

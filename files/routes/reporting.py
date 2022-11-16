@@ -1,16 +1,20 @@
-from files.helpers.wrappers import *
-from files.helpers.get import *
-from files.helpers.alerts import *
-from files.helpers.actions import *
 from flask import g
-from files.__main__ import app, limiter
-from os import path
+
+from files.classes.flags import Flag, CommentFlag
+from files.classes.mod_logs import ModAction
+from files.classes.sub_logs import SubAction
+from files.helpers.actions import *
+from files.helpers.alerts import *
+from files.helpers.get import *
 from files.helpers.sanitize import filter_emojis_only
+from files.routes.front import frontlist
+from files.routes.wrappers import *
+from files.__main__ import app, limiter, cache
 
 @app.post("/report/post/<pid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def flag_post(pid, v):
 	post = get_post(pid)
 	reason = request.values.get("reason", "").strip()
@@ -31,6 +35,7 @@ def flag_post(pid, v):
 				_note=f'"{post.flair}"'
 			)
 			g.db.add(ma)
+			position = 'Admin'
 		else:
 			ma = SubAction(
 				sub=post.sub,
@@ -40,6 +45,12 @@ def flag_post(pid, v):
 				_note=f'"{post.flair}"'
 			)
 			g.db.add(ma)
+			position = f'/h/{post.sub} Mod'
+
+		if v.id != post.author_id:
+			message = f'@{v.username} ({position}) has flaired [{post.title}]({post.shortlink}) with the flair: `"{post.flair}"`'
+			send_repeatable_notification(post.author_id, message)
+
 		return {"message": "Post flaired successfully!"}
 
 	moved = move_post(post, v, reason)
@@ -54,9 +65,9 @@ def flag_post(pid, v):
 
 
 @app.post("/report/comment/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def flag_comment(cid, v):
 
 	comment = get_comment(cid)
@@ -170,7 +181,10 @@ def move_post(post:Submission, v:User, reason:str) -> Union[bool, str]:
 			g.db.add(ma)
 
 		if v.admin_level >= PERMS['POST_COMMENT_MODERATION']: position = 'Admin'
-		else: position = 'Mod'
+		else: position = f'/h/{sub_from} Mod'
 		message = f"@{v.username} ({position}) has moved [{post.title}]({post.shortlink}) to /h/{post.sub}"
 		send_repeatable_notification(post.author_id, message)
+
+	cache.delete_memoized(frontlist)
+
 	return f"Post moved to /h/{post.sub}"

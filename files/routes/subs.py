@@ -1,12 +1,14 @@
-from files.__main__ import app, limiter
+from sqlalchemy import nullslast
+
+from files.classes import *
 from files.helpers.alerts import *
-from files.helpers.wrappers import *
 from files.helpers.get import *
 from files.helpers.regex import *
-from files.classes import *
+from files.routes.wrappers import *
+
 from .front import frontlist
-from sqlalchemy import nullslast
-import tldextract
+from files.__main__ import app, cache, limiter
+
 
 @app.post("/exile/post/<pid>")
 @is_not_permabanned
@@ -368,7 +370,7 @@ def kick(v, pid):
 	g.db.add(ma)
 
 	if v.id != post.author_id:
-		message = f"@{v.username} (Mod) has moved [{post.title}]({post.shortlink}) from /h/{old} to the main feed!"
+		message = f"@{v.username} (/h/{post.sub} Mod) has moved [{post.title}]({post.shortlink}) from /h/{old} to the main feed!"
 		send_repeatable_notification(post.author_id, message)
 
 	g.db.add(post)
@@ -386,9 +388,9 @@ def sub_settings(v, sub):
 
 
 @app.post('/h/<sub>/sidebar')
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @is_not_permabanned
+@ratelimit_user()
 def post_sub_sidebar(v, sub):
 	sub = get_sub_by_name(sub)
 	if not v.mods(sub.name): abort(403)
@@ -411,9 +413,9 @@ def post_sub_sidebar(v, sub):
 
 
 @app.post('/h/<sub>/css')
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @is_not_permabanned
+@ratelimit_user()
 def post_sub_css(v, sub):
 	sub = get_sub_by_name(sub)
 	css = request.values.get('css', '').strip()
@@ -457,7 +459,7 @@ def get_sub_css(sub):
 @limiter.limit("1/second;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @is_not_permabanned
 def sub_banner(v, sub):
-	if request.headers.get("cf-ipcountry") == "T1": abort(403, "Image uploads are not allowed through TOR.")
+	if g.is_tor: abort(403, "Image uploads are not allowed through TOR.")
 
 	sub = get_sub_by_name(sub)
 	if not v.mods(sub.name): abort(403)
@@ -467,7 +469,7 @@ def sub_banner(v, sub):
 
 	name = f'/images/{time.time()}'.replace('.','') + '.webp'
 	file.save(name)
-	bannerurl = process_image(name, patron=v.patron, resize=1200)
+	bannerurl = process_image(name, v, resize=1200)
 
 	if bannerurl:
 		if sub.bannerurl and '/images/' in sub.bannerurl:
@@ -490,7 +492,7 @@ def sub_banner(v, sub):
 @limiter.limit("1/second;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @is_not_permabanned
 def sub_sidebar(v, sub):
-	if request.headers.get("cf-ipcountry") == "T1": abort(403, "Image uploads are not allowed through TOR.")
+	if g.is_tor: abort(403, "Image uploads are not allowed through TOR.")
 
 	sub = get_sub_by_name(sub)
 	if not v.mods(sub.name): abort(403)
@@ -499,7 +501,7 @@ def sub_sidebar(v, sub):
 	file = request.files["sidebar"]
 	name = f'/images/{time.time()}'.replace('.','') + '.webp'
 	file.save(name)
-	sidebarurl = process_image(name, patron=v.patron, resize=400)
+	sidebarurl = process_image(name, v, resize=400)
 
 	if sidebarurl:
 		if sub.sidebarurl and '/images/' in sub.sidebarurl:
@@ -522,7 +524,7 @@ def sub_sidebar(v, sub):
 @limiter.limit("1/second;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @is_not_permabanned
 def sub_marsey(v, sub):
-	if request.headers.get("cf-ipcountry") == "T1": abort(403, "Image uploads are not allowed through TOR.")
+	if g.is_tor: abort(403, "Image uploads are not allowed through TOR.")
 
 	sub = get_sub_by_name(sub)
 	if not v.mods(sub.name): abort(403)
@@ -531,7 +533,7 @@ def sub_marsey(v, sub):
 	file = request.files["marsey"]
 	name = f'/images/{time.time()}'.replace('.','') + '.webp'
 	file.save(name)
-	marseyurl = process_image(name, patron=v.patron, resize=200)
+	marseyurl = process_image(name, v, resize=200)
 
 	if marseyurl:
 		if sub.marseyurl and '/images/' in sub.marseyurl:
@@ -553,7 +555,8 @@ def sub_marsey(v, sub):
 @auth_required
 def subs(v):
 	subs = g.db.query(Sub, func.count(Submission.sub)).outerjoin(Submission, Sub.name == Submission.sub).group_by(Sub.name).order_by(func.count(Submission.sub).desc()).all()
-	return render_template('sub/subs.html', v=v, subs=subs)
+	total_users = g.db.query(User).count()
+	return render_template('sub/subs.html', v=v, subs=subs, total_users=total_users)
 
 @app.post("/hole_pin/<pid>")
 @is_not_permabanned
@@ -568,7 +571,7 @@ def hole_pin(v, pid):
 	g.db.add(p)
 
 	if v.id != p.author_id:
-		message = f"@{v.username} (Mod) has pinned [{p.title}]({p.shortlink}) in /h/{p.sub}"
+		message = f"@{v.username} (/h/{p.sub} Mod) has pinned [{p.title}]({p.shortlink}) in /h/{p.sub}"
 		send_repeatable_notification(p.author_id, message)
 
 	ma = SubAction(
@@ -594,7 +597,7 @@ def hole_unpin(v, pid):
 	g.db.add(p)
 
 	if v.id != p.author_id:
-		message = f"@{v.username} (Mod) has unpinned [{p.title}]({p.shortlink}) in /h/{p.sub}"
+		message = f"@{v.username} (/h/{p.sub} Mod) has unpinned [{p.title}]({p.shortlink}) in /h/{p.sub}"
 		send_repeatable_notification(p.author_id, message)
 
 	ma = SubAction(
@@ -639,8 +642,8 @@ def sub_stealth(v, sub):
 
 
 @app.post("/mod_pin/<cid>")
-@is_not_permabanned
 @feature_required('PINS')
+@is_not_permabanned
 def mod_pin(cid, v):
 	
 	comment = get_comment(cid, v=v)
@@ -661,7 +664,7 @@ def mod_pin(cid, v):
 		g.db.add(ma)
 
 		if v.id != comment.author_id:
-			message = f"@{v.username} (Mod) has pinned your [comment]({comment.shortlink})!"
+			message = f"@{v.username} (/h/{comment.post.sub} Mod) has pinned your [comment]({comment.shortlink})!"
 			send_repeatable_notification(comment.author_id, message)
 
 	return {"message": "Comment pinned!"}
@@ -687,7 +690,7 @@ def mod_unpin(cid, v):
 		g.db.add(ma)
 
 		if v.id != comment.author_id:
-			message = f"@{v.username} (Mod) has unpinned your [comment]({comment.shortlink})!"
+			message = f"@{v.username} (/h/{comment.post.sub} Mod) has unpinned your [comment]({comment.shortlink})!"
 			send_repeatable_notification(comment.author_id, message)
 	return {"message": "Comment unpinned!"}
 

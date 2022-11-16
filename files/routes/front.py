@@ -1,30 +1,32 @@
-from files.helpers.wrappers import *
-from files.helpers.get import *
-from files.helpers.const import *
-from files.helpers.sorting_and_time import *
-from files.__main__ import app, cache, limiter
+
+from sqlalchemy import or_, not_
+
 from files.classes.submission import Submission
+from files.classes.votes import Vote
 from files.helpers.awards import award_timers
+from files.helpers.const import *
+from files.helpers.get import *
+from files.helpers.sorting_and_time import *
+from files.routes.wrappers import *
+from files.__main__ import app, cache, limiter
 
 @app.get("/")
 @app.get("/h/<sub>")
 @app.get("/s/<sub>")
-@app.get("/logged_out")
-@app.get("/logged_out/h/<sub>")
-@app.get("/logged_out/s/<sub>")
 @limiter.limit("3/second;30/minute;5000/hour;10000/day")
 @auth_desired_with_logingate
 def front_all(v, sub=None, subdomain=None):
 	#### WPD TEMP #### special front logic
-	from files.helpers.security import generate_hash, validate_hash
 	from datetime import datetime
+
+	from files.helpers.security import generate_hash, validate_hash
 	now = datetime.utcnow()
 	if SITE == 'watchpeopledie.co':
 		if v and not v.admin_level and not v.id <= 9: # security: don't auto login admins or bots
 			hash = generate_hash(f'{v.id}+{now.year}+{now.month}+{now.day}+{now.hour}+WPDusermigration')
-			return redirect(f'https://watchpeopledie.tv/logged_out?user={v.id}&code={hash}', 301)
+			return redirect(f'https://watchpeopledie.tv/?user={v.id}&code={hash}', 301)
 		else:
-			return redirect('https://watchpeopledie.tv/logged_out', 301)
+			return redirect('https://watchpeopledie.tv/', 301)
 	elif SITE == 'watchpeopledie.tv' and not v: # security: don't try to login people into accounts more than once
 		req_user = request.values.get('user')
 		req_code = request.values.get('code')
@@ -37,8 +39,7 @@ def front_all(v, sub=None, subdomain=None):
 				else:
 					if validate_hash(f'{user.id}+{now.year}+{now.month}+{now.day}+{now.hour}+WPDusermigration', req_code):
 						on_login(user)
-						return redirect('/')
-			return redirect('/logged_out')
+			return redirect('/')
 	#### WPD TEMP #### end special front logic
 	if sub:
 		sub = sub.strip().lower()
@@ -87,27 +88,26 @@ def front_all(v, sub=None, subdomain=None):
 					holes=holes
 					)
 
-	posts = get_posts(ids, v=v)
+	posts = get_posts(ids, v=v, eager=True)
 	
 	if v:
 		if v.hidevotedon: posts = [x for x in posts if not hasattr(x, 'voted') or not x.voted]
 		award_timers(v)
 
-	if v and v.client: return {"data": [x.json for x in posts], "next_exists": next_exists}
+	if v and v.client: return {"data": [x.json(g.db) for x in posts], "next_exists": next_exists}
 	return render_template("home.html", v=v, listing=posts, next_exists=next_exists, sort=sort, t=t, page=page, sub=sub, home=True, pins=pins, holes=holes)
-
 
 
 @cache.memoize(timeout=86400)
 def frontlist(v=None, sort="hot", page=1, t="all", ids_only=True, filter_words='', gt=0, lt=0, sub=None, site=None, pins=True, holes=True):
-
 	posts = g.db.query(Submission)
 	
 	if v and v.hidevotedon:
-		voted = [x[0] for x in g.db.query(Vote.submission_id).filter_by(user_id=v.id).all()]
-		posts = posts.filter(Submission.id.notin_(voted))
+		posts = posts.outerjoin(Vote,
+					and_(Vote.submission_id == Submission.id, Vote.user_id == v.id)
+				).filter(Vote.submission_id == None)
 
-	if sub: posts = posts.filter_by(sub=sub.name)
+	if sub: posts = posts.filter(Submission.sub == sub.name)
 	elif v: posts = posts.filter(or_(Submission.sub == None, Submission.sub.notin_(v.all_blocks)))
 
 	if gt: posts = posts.filter(Submission.created_utc > gt)
@@ -116,11 +116,15 @@ def frontlist(v=None, sort="hot", page=1, t="all", ids_only=True, filter_words='
 	if not gt and not lt:
 		posts = apply_time_filter(t, posts, Submission)
 
-	posts = posts.filter_by(is_banned=False, private=False, deleted_utc = 0)
+	posts = posts.filter(
+		Submission.is_banned == False,
+		Submission.private == False,
+		Submission.deleted_utc == 0,
+	)
 
 	if pins and not gt and not lt:
-		if sub: posts = posts.filter_by(hole_pinned=None)
-		else: posts = posts.filter_by(stickied=None)
+		if sub: posts = posts.filter(Submission.hole_pinned == None)
+		else: posts = posts.filter(Submission.stickied == None)
 
 	if not sub and not holes:
 		posts = posts.filter(or_(Submission.sub == None, Submission.sub == 'changelog'))
@@ -227,7 +231,7 @@ def all_comments(v):
 	next_exists = len(idlist) > PAGE_SIZE
 	idlist = idlist[:PAGE_SIZE]
 
-	if v.client: return {"data": [x.json for x in comments]}
+	if v.client: return {"data": [x.json(g.db) for x in comments]}
 	return render_template("home_comments.html", v=v, sort=sort, t=t, page=page, comments=comments, standalone=True, next_exists=next_exists)
 
 

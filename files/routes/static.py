@@ -1,15 +1,19 @@
-from files.mail import *
-from files.__main__ import app, limiter
+import os
+from shutil import copyfile
+
+from sqlalchemy import func, nullslast
+from files.helpers.media import process_files
+
+import files.helpers.stats as statshelper
+from files.classes.award import AWARDS
+from files.classes.badges import Badge, BadgeDef
+from files.classes.mod_logs import ModAction, ACTIONTYPES, ACTIONTYPES2
+from files.classes.userblock import UserBlock
+from files.helpers.actions import *
 from files.helpers.alerts import *
 from files.helpers.const import *
-from files.helpers.actions import *
-from files.classes.award import AWARDS
-from sqlalchemy import func, nullslast
-import os
-from files.classes.mod_logs import ACTIONTYPES, ACTIONTYPES2
-from files.classes.badges import BadgeDef
-import files.helpers.stats as statshelper
-from shutil import move, copyfile
+from files.routes.wrappers import *
+from files.__main__ import app, cache, limiter
 
 
 @app.get("/r/drama/comments/<id>/<title>")
@@ -22,7 +26,7 @@ def rdrama(id, title):
 @app.get("/marseys")
 @auth_required
 def marseys(v):
-	if SITE.startswith('rdrama.'):
+	if SITE == 'rdrama.net':
 		marseys = g.db.query(Marsey, User).join(User, Marsey.author_id == User.id).filter(Marsey.submitter_id==None)
 		sort = request.values.get("sort", "usage")
 		if sort == "usage":
@@ -52,7 +56,7 @@ def marsey_list():
 	if EMOJI_MARSEYS:
 		emojis = [{
 			"name": emoji.name,
-			"author": author if SITE.startswith('rdrama.') or author == "anton-d" else None,
+			"author": author if SITE == 'rdrama.net' or author == "anton-d" else None,
 			# yikes, I don't really like this DB schema. Next time be better
 			"tags": emoji.tags.split(" ") + [emoji.name[len("marsey"):] \
 						if emoji.name.startswith("marsey") else emoji.name],
@@ -142,7 +146,11 @@ def log(v):
 	else:
 		actions = g.db.query(ModAction)
 		if not (v and v.admin_level >= PERMS['USER_SHADOWBAN']): 
-			actions = actions.filter(ModAction.kind.notin_(["shadowban","unshadowban"]))
+			actions = actions.filter(ModAction.kind.notin_([
+				"shadowban","unshadowban",
+				"mod_mute_user","mod_unmute_user",
+				"link_accounts","delink_accounts",
+				]))
 
 		if admin_id:
 			actions = actions.filter_by(user_id=admin_id)
@@ -199,8 +207,8 @@ def contact(v):
 	return render_template("contact.html", v=v)
 
 @app.post("/send_admin")
-@limiter.limit("1/second;2/minute;6/hour;10/day")
-@limiter.limit("1/second;2/minute;6/hour;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit("1/second;1/2 minutes;10/day")
+@limiter.limit("1/second;1/2 minutes;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @auth_required
 def submit_contact(v):
 	body = request.values.get("message")
@@ -210,12 +218,11 @@ def submit_contact(v):
 		abort(403)
 
 	body = f'This message has been sent automatically to all admins via [/contact](/contact)\n\nMessage:\n\n' + body
-
-	body += process_files()
-
+	body += process_files(request.files, v)
 	body = body.strip()
-	
 	body_html = sanitize(body)
+
+	execute_antispam_duplicate_comment_check(v, body_html)
 
 	new_comment = Comment(author_id=v.id,
 						parent_submission=None,
@@ -225,6 +232,7 @@ def submit_contact(v):
 						)
 	g.db.add(new_comment)
 	g.db.flush()
+	execute_blackjack(v, new_comment, new_comment.body_html, 'modmail')
 	new_comment.top_comment_id = new_comment.id
 	
 	admins = g.db.query(User).filter(User.admin_level >= PERMS['NOTIFICATIONS_MODMAIL'])
@@ -320,8 +328,8 @@ def badge_list(site):
 	return badges, counts
 
 @app.get("/badges")
-@auth_required
 @feature_required('BADGES')
+@auth_required
 def badges(v):
 	badges, counts = badge_list(SITE)
 	return render_template("badges.html", v=v, badges=badges, counts=counts)
@@ -392,7 +400,7 @@ def transfers(v):
 	comments = comments[:PAGE_SIZE]
 
 	if v.client:
-		return {"data": [x.json for x in comments]}
+		return {"data": [x.json(g.db) for x in comments]}
 	else:
 		return render_template("transfers.html", v=v, page=page, comments=comments, standalone=True, next_exists=next_exists)
 
@@ -401,177 +409,6 @@ if not os.path.exists(f'files/templates/donate_{SITE_NAME}.html'):
 	copyfile(f'files/templates/donate_rDrama.html', f'files/templates/donate_{SITE_NAME}.html')
 
 @app.get('/donate')
-@app.get('/logged_out/donate')
 @auth_desired_with_logingate
 def donate(v):
 	return render_template(f'donate_{SITE_NAME}.html', v=v)
-
-
-if SITE == 'pcmemes.net':
-	from files.classes.streamers import *
-
-	id_regex = re.compile('"externalId":"([^"]*?)"', flags=re.A)
-	live_regex = re.compile('playerOverlayVideoDetailsRenderer":\{"title":\{"simpleText":"(.*?)"\},"subtitle":\{"runs":\[\{"text":"(.*?)"\},\{"text":" • "\},\{"text":"(.*?)"\}', flags=re.A)
-	live_thumb_regex = re.compile('\{"thumbnail":\{"thumbnails":\[\{"url":"(.*?)"', flags=re.A)
-	offline_regex = re.compile('","title":"(.*?)".*?"width":48,"height":48\},\{"url":"(.*?)"', flags=re.A)
-	offline_details_regex = re.compile('simpleText":"Streamed ([0-9]*?) ([^"]*?)"\},.*?"viewCountText":\{"simpleText":"([0-9,]*?) views"', flags=re.A)
-
-	def process_streamer(id, live='live'):
-		url = f'https://www.youtube.com/channel/{id}/{live}'
-		req = requests.get(url, cookies={'CONSENT': 'YES+1'}, timeout=5)
-		text = req.text
-		if '"videoDetails":{"videoId"' in text:
-			y = live_regex.search(text)
-			count = y.group(3)
-
-			if count == '1 watching now':
-				count = "1"
-
-			if 'waiting' in count:
-				if live != '':
-					return process_streamer(id, '')
-				else:
-					return None
-
-			count = int(count.replace(',', ''))
-
-			t = live_thumb_regex.search(text)
-
-			thumb = t.group(1)
-			name = y.group(2)
-			title = y.group(1)
-			
-			return (True, (id, req.url, thumb, name, title, count))
-		else:
-			t = offline_regex.search(text)
-			if not t:
-				if live != '':
-					return process_streamer(id, '')
-				else:
-					return None
-
-			y = offline_details_regex.search(text)
-
-			if y:
-				views = y.group(3).replace(',', '')
-				quantity = int(y.group(1))
-				unit = y.group(2)
-
-				if unit.startswith('second'):
-					modifier = 1/60
-				elif unit.startswith('minute'):
-					modifier = 1
-				elif unit.startswith('hour'):
-					modifier = 60
-				elif unit.startswith('day'):
-					modifier = 1440
-				elif unit.startswith('week'):
-					modifier = 10080
-				elif unit.startswith('month'):
-					modifier = 43800
-				elif unit.startswith('year'):
-					modifier = 525600
-
-				minutes = quantity * modifier
-
-				actual = f'{quantity} {unit}'
-			else:
-				minutes = 9999999999
-				actual = '???'
-				views = 0
-
-			thumb = t.group(2)
-
-			name = t.group(1)
-
-			return (False, (id, req.url.rstrip('/live'), thumb, name, minutes, actual, views))
-
-
-	def live_cached():
-		live = []
-		offline = []
-		db = db_session()
-		streamers = [x[0] for x in db.query(Streamer.id).all()]
-		db.close()
-		for id in streamers:
-			processed = process_streamer(id)
-			if processed:
-				if processed[0]: live.append(processed[1])
-				else: offline.append(processed[1])
-
-		live = sorted(live, key=lambda x: x[5], reverse=True)
-		offline = sorted(offline, key=lambda x: x[4])
-
-		if live: cache.set('live', live)
-		if offline: cache.set('offline', offline)
-
-
-	@app.get('/live')
-	@app.get('/logged_out/live')
-	@auth_desired_with_logingate
-	def live_list(v):
-		live = cache.get('live') or []
-		offline = cache.get('offline') or []
-
-		return render_template('live.html', v=v, live=live, offline=offline)
-
-	@app.post('/live/add')
-	@admin_level_required(PERMS['STREAMERS_MODERATION'])
-	def live_add(v):
-		link = request.values.get('link').strip()
-
-		if 'youtube.com/channel/' in link:
-			id = link.split('youtube.com/channel/')[1].rstrip('/')
-		else:
-			text = requests.get(link, cookies={'CONSENT': 'YES+1'}, timeout=5).text
-			try: id = id_regex.search(text).group(1)
-			except: abort(400, "Invalid ID")
-
-		live = cache.get('live') or []
-		offline = cache.get('offline') or []
-
-		if not id or len(id) != 24:
-			abort(400, "Invalid ID")
-
-		existing = g.db.get(Streamer, id)
-		if not existing:
-			streamer = Streamer(id=id)
-			g.db.add(streamer)
-			g.db.flush()
-			if v.id != KIPPY_ID:
-				send_repeatable_notification(KIPPY_ID, f"@{v.username} (Admin) has added a [new YouTube channel](https://www.youtube.com/channel/{streamer.id})")
-
-			processed = process_streamer(id)
-			if processed:
-				if processed[0]: live.append(processed[1])
-				else: offline.append(processed[1])
-
-		live = sorted(live, key=lambda x: x[5], reverse=True)
-		offline = sorted(offline, key=lambda x: x[4])
-
-		if live: cache.set('live', live)
-		if offline: cache.set('offline', offline)
-
-		return redirect('/live')
-
-	@app.post('/live/remove')
-	@admin_level_required(PERMS['STREAMERS_MODERATION'])
-	def live_remove(v):
-		id = request.values.get('id').strip()
-		if not id: abort(400)
-		streamer = g.db.get(Streamer, id)
-		if streamer:
-			if v.id != KIPPY_ID:
-				send_repeatable_notification(KIPPY_ID, f"@{v.username} (Admin) has removed a [YouTube channel](https://www.youtube.com/channel/{streamer.id})")
-			g.db.delete(streamer)
-
-		live = cache.get('live') or []
-		offline = cache.get('offline') or []
-
-		live = [x for x in live if x[0] != id]
-		offline = [x for x in offline if x[0] != id]
-
-		if live: cache.set('live', live)
-		if offline: cache.set('offline', offline)
-
-		return redirect('/live')

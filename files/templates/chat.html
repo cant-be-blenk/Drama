@@ -1,4 +1,4 @@
-{%- import 'util/helpers.html' as help -%}
+{%- import 'util/macros.html' as macros with context -%}
 {%- import 'html_head.html' as html_head with context -%}
 <!DOCTYPE html>
 <html lang="en">
@@ -10,14 +10,14 @@
 {{html_head.html_head(true, true, true, csp, "Chat", none, "", false)}}
 <body>
 	{% include "header.html" %}
-	{% include "expanded_image_modal.html" %}
-	{% include "emoji_modal.html" %}
+	{% include "modals/expanded_image.html" %}
+	{% include "modals/emoji.html" %}
 
 	<div
 		id="root"
 		data-id="{{v.id}}"
 		data-username="{{v.username}}"
-		data-admin="{{v.admin_level >= PERMS['ADMIN_MOP_VISIBLE']}}"
+		data-admin="{{v.admin_level >= PERMS['POST_COMMENT_MODERATION_TOOLS_VISIBLE']}}"
 		data-censored="{{v.slurreplacer}}"
 		data-sitename="{{SITE_NAME}}"
 		data-themecolor="{{v.themecolor}}"

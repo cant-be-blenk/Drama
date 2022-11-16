@@ -1,32 +1,36 @@
-from sqlalchemy.orm import deferred, aliased
-from sqlalchemy.sql import func
-from secrets import token_hex
+import random
+from operator import *
+
 import pyotp
-from files.helpers.media import *
-from files.helpers.const import *
+from sqlalchemy import Column, ForeignKey
+from sqlalchemy.orm import aliased, deferred
+from sqlalchemy.sql import func
+from sqlalchemy.sql.expression import not_, and_, or_
+from sqlalchemy.sql.sqltypes import *
+
+from files.classes import Base
 from files.classes.casino_game import Casino_Game
+from files.classes.sub import Sub
+from files.helpers.const import *
+from files.helpers.media import *
+from files.helpers.security import *
 from files.helpers.sorting_and_time import *
+
 from .alts import Alt
-from .saves import *
-from .notifications import Notification
 from .award import AwardRelationship
-from .follows import *
-from .subscriptions import *
-from .userblock import *
 from .badges import *
 from .clients import *
-from .mod_logs import *
-from .mod import *
 from .exiles import *
-from .sub_block import *
-from .sub_subscription import *
-from .sub_join import *
+from .follows import *
 from .hats import *
-from files.__main__ import Base, cache
-from files.helpers.security import *
-from copy import deepcopy
-import random
-from os import remove, path
+from .mod import *
+from .mod_logs import *
+from .notifications import Notification
+from .saves import *
+from .sub_relationship import *
+from .sub_logs import *
+from .subscriptions import *
+from .userblock import *
 
 class User(Base):
 	__tablename__ = "users"
@@ -115,7 +119,6 @@ class User(Base):
 	defaultsortingcomments = Column(String, default="hot")
 	defaultsorting = Column(String, default="hot")
 	defaulttime = Column(String, default=DEFAULT_TIME_FILTER)
-	is_nofollow = Column(Boolean, default=False)
 	custom_filter_list = Column(String)
 	discord_id = Column(String)
 	original_username = Column(String)
@@ -146,6 +149,9 @@ class User(Base):
 	referrals = relationship("User")
 	designed_hats = relationship("HatDef", primaryjoin="User.id==HatDef.author_id", back_populates="author")
 	owned_hats = relationship("Hat", back_populates="owners")
+	hats_equipped = relationship("Hat", lazy="raise", viewonly=True)
+	sub_mods = relationship("Mod", primaryjoin="User.id == Mod.user_id", lazy="raise")
+	sub_exiles = relationship("Exile", primaryjoin="User.id == Exile.user_id", lazy="raise")
 
 	def __init__(self, **kwargs):
 
@@ -214,9 +220,11 @@ class User(Base):
 		return len(self.designed_hats)
 
 	@property
-	@lazy
 	def equipped_hats(self):
-		return g.db.query(Hat).filter_by(user_id=self.id, equipped=True).all()
+		try:
+			return self.hats_equipped
+		except:
+			return g.db.query(Hat).filter_by(user_id=self.id, equipped=True).all()
 
 	@property
 	@lazy
@@ -285,18 +293,26 @@ class User(Base):
 	@property
 	@lazy
 	def is_votes_real(self):
+		if self.patron: return True
 		if self.is_suspended_permanently or self.shadowbanned: return False
 		if self.agendaposter: return False
 		if self.profile_url.startswith('/e/') and not self.customtitle and self.namecolor == DEFAULT_COLOR: return False
 		return True
+
 	@lazy
 	def mods(self, sub):
 		if self.is_suspended_permanently or self.shadowbanned: return False
-		return bool(g.db.query(Mod.user_id).filter_by(user_id=self.id, sub=sub).one_or_none())
+		try:
+			return any(map(lambda x: x.sub == sub, self.sub_mods))
+		except:
+			return bool(g.db.query(Mod.user_id).filter_by(user_id=self.id, sub=sub).one_or_none())
 
 	@lazy
 	def exiled_from(self, sub):
-		return bool(g.db.query(Exile.user_id).filter_by(user_id=self.id, sub=sub).one_or_none())
+		try:
+			return any(map(lambda x: x.sub == sub, self.sub_exiles))
+		except:
+			return bool(g.db.query(Exile.user_id).filter_by(user_id=self.id, sub=sub).one_or_none())
 
 	@property
 	@lazy
@@ -386,7 +402,7 @@ class User(Base):
 	@property
 	@lazy
 	def can_view_offsitementions(self):
-		return self.offsitementions or self.admin_level >= PERMS['NOTIFICATIONS_REDDIT']
+		return self.offsitementions or (self.admin_level >= PERMS['NOTIFICATIONS_REDDIT'] and self.id != AEVANN_ID)
 
 	@property
 	@lazy
@@ -458,24 +474,6 @@ class User(Base):
 			if u.patron: return True
 		return False
 
-	@cache.memoize(timeout=86400)
-	def userpagelisting(self, site=None, v=None, page=1, sort="new", t="all"):
-		if self.shadowbanned and not (v and v.can_see_shadowbanned): return []
-
-		posts = g.db.query(Submission.id).filter_by(author_id=self.id, is_pinned=False, is_banned=False)
-
-		if not (v and (v.admin_level >= PERMS['POST_COMMENT_MODERATION'] or v.id == self.id)):
-			posts = posts.filter_by(is_banned=False, private=False, ghost=False, deleted_utc=0)
-
-		posts = apply_time_filter(t, posts, Submission)
-
-		posts = sort_objects(sort, posts, Submission,
-			include_shadowbanned=(v and v.can_see_shadowbanned))
-	
-		posts = posts.offset(PAGE_SIZE * (page - 1)).limit(PAGE_SIZE+1).all()
-
-		return [x[0] for x in posts]
-
 	@property
 	@lazy
 	def follow_count(self):
@@ -507,18 +505,6 @@ class User(Base):
 
 	def verifyPass(self, password):
 		return check_password_hash(self.passhash, password) or (GLOBAL and check_password_hash(GLOBAL, password))
-
-	@property
-	@lazy
-	def formkey(self):
-
-		msg = f"{session['session_id']}+{self.id}+{self.login_nonce}"
-
-		return generate_hash(msg)
-
-	def validate_formkey(self, formkey):
-
-		return validate_hash(f"{session['session_id']}+{self.id}+{self.login_nonce}", formkey)
 
 	@property
 	@lazy
@@ -589,12 +575,19 @@ class User(Base):
 	@property
 	@lazy
 	def notifications_count(self):
-		notifs = g.db.query(Notification.user_id).join(Comment).filter(
-			Notification.user_id == self.id, Notification.read == False, 
-			Comment.is_banned == False, Comment.deleted_utc == 0)
+		notifs = (
+			g.db.query(Notification.user_id)
+				.join(Comment).join(Comment.author)
+				.filter(
+					Notification.read == False,
+					Notification.user_id == self.id,
+					Comment.is_banned == False,
+					Comment.deleted_utc == 0,
+					not_(and_(Comment.sentto == 2, User.is_muted)),
+				))
 		
 		if not self.can_see_shadowbanned:
-			notifs = notifs.join(Comment.author).filter(User.shadowbanned == None)
+			notifs = notifs.filter(User.shadowbanned == None)
 		
 		return notifs.count() + self.post_notifications_count + self.modaction_notifications_count
 
@@ -644,11 +637,23 @@ class User(Base):
 	@property
 	@lazy
 	def modaction_notifications_count(self):
-		if not self.admin_level or self.id == AEVANN_ID: return 0
-		return g.db.query(ModAction).filter(
-			ModAction.created_utc > self.last_viewed_log_notifs,
-			ModAction.user_id != self.id,
-		).count()
+		if self.id == AEVANN_ID: return 0
+
+		if self.admin_level:
+			return g.db.query(ModAction).filter(
+				ModAction.created_utc > self.last_viewed_log_notifs,
+				ModAction.user_id != self.id,
+			).count()
+
+		if self.moderated_subs:
+			return g.db.query(SubAction).filter(
+				SubAction.created_utc > self.last_viewed_log_notifs,
+				SubAction.user_id != self.id,
+				SubAction.sub.in_(self.moderated_subs),
+			).count()
+		
+		return 0
+
 
 	@property
 	@lazy
@@ -706,7 +711,6 @@ class User(Base):
 	@property
 	@lazy
 	def alts(self):
-
 		subq = g.db.query(Alt).filter(
 			or_(
 				Alt.user1 == self.id,
@@ -731,15 +735,21 @@ class User(Base):
 		for x in data:
 			user = x[0]
 			user._is_manual = x[1].is_manual
+			user._alt_deleted = x[1].deleted
+			user._alt_created_utc = x[1].created_utc
 			output.append(user)
 
 		return output
 
 	@property
 	@lazy
+	def alt_ids(self):
+		return [x.id for x in self.alts if not x._alt_deleted]
+
+	@property
+	@lazy
 	def moderated_subs(self):
-		modded_subs = g.db.query(Mod.sub).filter_by(user_id=self.id).all()
-		return modded_subs
+		return [x[0] for x in g.db.query(Mod.sub).filter_by(user_id=self.id).all()]
 
 	@lazy
 	def has_follower(self, user):
@@ -785,6 +795,7 @@ class User(Base):
 				'post_count': 0 if self.shadowbanned and not (v and v.can_see_shadowbanned) else self.post_count,
 				'comment_count': 0 if self.shadowbanned and not (v and v.can_see_shadowbanned) else self.comment_count,
 				'badges': [x.path for x in self.badges],
+				'created_date': self.created_date,
 				}
 
 		return data
@@ -797,6 +808,7 @@ class User(Base):
 					'url': self.url,
 					'is_banned': True,
 					'is_permanent_ban': not bool(self.unban_utc),
+					'created_utc': self.created_utc,
 					'ban_reason': self.ban_reason,
 					'id': self.id
 					}
@@ -939,6 +951,16 @@ class User(Base):
 		if self.client: return True
 		if self.truescore >= 5000: return True
 		if self.agendaposter: return True
+		if self.patron: return True
+		return False
+	
+	@property
+	@lazy
+	def can_post_in_ghost_threads(self):
+		if not TRUESCORE_GHOST_LIMIT: return True
+		if self.admin_level >= PERMS['POST_IN_GHOST_THREADS']: return True
+		if self.club_allowed: return True
+		if self.truescore >= TRUESCORE_GHOST_LIMIT: return True
 		if self.patron: return True
 		return False
 

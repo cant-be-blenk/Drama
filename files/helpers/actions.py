@@ -1,28 +1,37 @@
+import random
+import time
+from urllib.parse import quote
+
+import gevent
+import requests
 from flask import g
+from files.classes.flags import Flag
+from files.classes.mod_logs import ModAction
+from files.classes.notifications import Notification
+
 from files.helpers.alerts import send_repeatable_notification
 from files.helpers.const import *
+from files.helpers.const_stateful import *
 from files.helpers.get import *
 from files.helpers.sanitize import *
 from files.helpers.slots import check_slots_command
-import random
-from urllib.parse import quote
 
 headers = {'User-Agent': 'Mozilla/4.0 (compatible; MSIE 5.5; Windows NT)'}
 
-def archiveorg(url):
+def _archiveorg(url):
 	try: requests.get(f'https://web.archive.org/save/{url}', headers=headers, timeout=10, proxies=proxies)
 	except: pass
 	requests.post('https://ghostarchive.org/archive2', data={"archive": url}, headers=headers, timeout=10, proxies=proxies)
 
 
 def archive_url(url):	
-	gevent.spawn(archiveorg, url)
+	gevent.spawn(_archiveorg, url)
 	if url.startswith('https://twitter.com/'):
 		url = url.replace('https://twitter.com/', 'https://nitter.lacontrevoie.fr/')
-		gevent.spawn(archiveorg, url)
+		gevent.spawn(_archiveorg, url)
 	if url.startswith('https://instagram.com/'):
 		url = url.replace('https://instagram.com/', 'https://imginn.com/')
-		gevent.spawn(archiveorg, url)
+		gevent.spawn(_archiveorg, url)
 
 
 def execute_snappy(post, v):
@@ -39,6 +48,8 @@ def execute_snappy(post, v):
 		else: body = "wow, a good lawlzpost for once!"
 	elif not SNAPPY_MARSEYS and not SNAPPY_QUOTES:
 		body = ""
+	elif post.sub == 'masterbaiters' and random.random() < 0.33:
+		body = "Can you people come up with any ideas that don't involve committing federal crimes"
 	else:
 		if SNAPPY_MARSEYS and SNAPPY_QUOTES:
 			if random.random() < 0.5: SNAPPY_CHOICES = SNAPPY_MARSEYS
@@ -85,7 +96,7 @@ def execute_snappy(post, v):
 			rev = post.url.replace('https://old.reddit.com/u/', '')
 			rev = f"* [camas.unddit.com](https://camas.unddit.com/reddit-search/#\u007b\"author\":\"{rev}\",\"resultSize\":100\u007d)\n"
 		else: rev = ''
-		
+
 		body += f"Snapshots:\n\n{rev}* [archive.org](https://web.archive.org/{post.url})\n* [ghostarchive.org](https://ghostarchive.org/search?term={quote(post.url)})\n* [archive.ph](https://archive.ph/?url={quote(post.url)}&run=1) (click to archive)\n\n"
 		archive_url(post.url)
 
@@ -212,7 +223,7 @@ def execute_zozbot(c, level, parent_submission, v):
 
 	g.db.add(c3)
 	g.db.flush()
-		
+
 
 	c4 = Comment(author_id=ZOZBOT_ID,
 		parent_submission=parent_submission,
@@ -280,7 +291,7 @@ def execute_basedbot(c, level, body, parent_post, v):
 
 	body2 = f"@{basedguy.username}'s Based Count has increased by 1. Their Based Count is now {basedguy.basedcount}."
 	if basedguy.pills: body2 += f"\n\nPills: {basedguy.pills}"
-	
+
 	body_based_html = sanitize(body2)
 	c_based = Comment(author_id=BASEDBOT_ID,
 		parent_submission=parent_post.id,
@@ -343,7 +354,11 @@ def execute_antispam_submission_check(title, v, url):
 		return False
 	return True
 
+def execute_blackjack_custom(v, target, body, type):
+	return True
+
 def execute_blackjack(v, target, body, type):
+	if not execute_blackjack_custom(v, target, body, type): return False
 	if not blackjack or not body: return True
 	if any(i in body.lower() for i in blackjack.split()):
 		v.shadowbanned = 'AutoJanny'
@@ -360,13 +375,33 @@ def execute_blackjack(v, target, body, type):
 			extra_info = "chat message"
 		elif type == 'flag':
 			extra_info = f"reports on {target.permalink}"
+		elif type == 'modmail':
+			extra_info = "modmail"
 
-		if notif: 
+		if notif:
 			g.db.add(notif)
 			g.db.flush()
-		elif extra_info: send_repeatable_notification(CARP_ID, f"Blackjack for {v.name}: {extra_info}")
+		elif extra_info: send_repeatable_notification(CARP_ID, f"Blackjack for {v.username}: {extra_info}")
 		return False
 	return True
+
+def execute_antispam_duplicate_comment_check(v:User, body_html:str):
+	'''
+	Sanity check for newfriends
+	'''
+	if v.id in ANTISPAM_BYPASS_IDS or v.admin_level: return
+	if v.age >= NOTIFICATION_SPAM_AGE_THRESHOLD: return
+	if len(body_html) < 16: return
+	if body_html == '!wordle': return # wordle
+	compare_time = int(time.time()) - 60 * 60 * 24
+	comment = g.db.query(Comment.id).filter(Comment.body_html == body_html,
+											Comment.created_utc >= compare_time).first()
+	if not comment: return
+	v.ban(reason="Spamming.", days=0.0)
+	send_repeatable_notification(v.id, "Your account has been banned **permanently** for the following reason:\n\n> Too much spam!")
+	g.db.add(v)
+	g.db.commit()
+	abort(403, "Too much spam!")
 
 def execute_antispam_comment_check(body:str, v:User):
 	if v.id in ANTISPAM_BYPASS_IDS: return
@@ -385,7 +420,7 @@ def execute_antispam_comment_check(body:str, v:User):
 		threshold *= 3
 	elif v.age >= (60 * 60 * 24):
 		threshold *= 2
-	
+
 	if len(similar_comments) <= threshold: return
 	text = "Your account has been banned for **1 day** for the following reason:\n\n> Too much spam!"
 	send_repeatable_notification(v.id, text)
@@ -435,22 +470,3 @@ def execute_lawlz_actions(v:User, p:Submission):
 	g.db.add(ma_1)
 	g.db.add(ma_2)
 	g.db.add(ma_3)
-
-def execute_pizza_autovote(v:User, target:Union[Submission, Comment]):
-	if v.id != PIZZASHILL_ID: return
-	if SITE_NAME != 'rDrama': return
-	votes = len(PIZZA_VOTERS)
-	for uid in PIZZA_VOTERS:
-		if isinstance(target, Submission):
-			autovote = Vote(user_id=uid, submission_id=target.id, vote_type=1)
-		elif isinstance(target, Comment):
-			autovote = CommentVote(user_id=uid, comment_id=target.id, vote_type=1)
-		else:
-			raise TypeError("Expected Submission or Comment")
-		autovote.created_utc += 1
-		g.db.add(autovote)
-	v.coins += votes
-	v.truescore += votes
-	g.db.add(v)
-	target.upvotes += votes
-	g.db.add(target)

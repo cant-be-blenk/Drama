@@ -1,48 +1,43 @@
-from os import environ
-import re
 from copy import deepcopy
-from json import loads
-from files.__main__ import db_session
-from files.classes.sub import Sub
-from files.classes.marsey import Marsey
-from flask import request
+from os import environ, path
+
 import tldextract
-from os import path
+
 from .events import *
 
-SITE = environ.get("SITE").strip()
-SITE_NAME = environ.get("SITE_NAME").strip()
-SECRET_KEY = environ.get("SECRET_KEY").strip()
-PROXY_URL = environ.get("PROXY_URL").strip()
-GIPHY_KEY = environ.get('GIPHY_KEY').strip()
-DISCORD_BOT_TOKEN = environ.get("DISCORD_BOT_TOKEN").strip()
-HCAPTCHA_SITEKEY = environ.get("HCAPTCHA_SITEKEY").strip()
-HCAPTCHA_SECRET = environ.get("HCAPTCHA_SECRET").strip()
-YOUTUBE_KEY = environ.get("YOUTUBE_KEY").strip()
-PUSHER_ID = environ.get("PUSHER_ID").strip()
-PUSHER_KEY = environ.get("PUSHER_KEY").strip()
-IMGUR_KEY = environ.get("IMGUR_KEY").strip()
-SPAM_SIMILARITY_THRESHOLD = float(environ.get("SPAM_SIMILARITY_THRESHOLD").strip())
-SPAM_URL_SIMILARITY_THRESHOLD = float(environ.get("SPAM_URL_SIMILARITY_THRESHOLD").strip())
-SPAM_SIMILAR_COUNT_THRESHOLD = int(environ.get("SPAM_SIMILAR_COUNT_THRESHOLD").strip())
-COMMENT_SPAM_SIMILAR_THRESHOLD = float(environ.get("COMMENT_SPAM_SIMILAR_THRESHOLD").strip())
-COMMENT_SPAM_COUNT_THRESHOLD = int(environ.get("COMMENT_SPAM_COUNT_THRESHOLD").strip())
-DEFAULT_TIME_FILTER = environ.get("DEFAULT_TIME_FILTER").strip()
-GUMROAD_TOKEN = environ.get("GUMROAD_TOKEN").strip()
-GUMROAD_LINK = environ.get("GUMROAD_LINK").strip()
-GUMROAD_ID = environ.get("GUMROAD_ID").strip()
-CARD_VIEW = bool(int(environ.get("CARD_VIEW").strip()))
-DISABLE_DOWNVOTES = bool(int(environ.get("DISABLE_DOWNVOTES").strip()))
-DUES = int(environ.get("DUES").strip())
-DEFAULT_THEME = environ.get("DEFAULT_THEME").strip()
-DEFAULT_COLOR = environ.get("DEFAULT_COLOR").strip()
-EMAIL = environ.get("EMAIL").strip()
-MAILGUN_KEY = environ.get("MAILGUN_KEY").strip()
-DESCRIPTION = environ.get("DESCRIPTION").strip()
-CF_KEY = environ.get("CF_KEY").strip()
-CF_ZONE = environ.get("CF_ZONE").strip()
-TELEGRAM_LINK = environ.get("TELEGRAM_LINK").strip()
-
+DEFAULT_CONFIG_VALUE = "blahblahblah"
+SITE = environ.get("SITE", "localhost").strip()
+SITE_NAME = environ.get("SITE_NAME", "rdrama.net").strip()
+SECRET_KEY = environ.get("SECRET_KEY", DEFAULT_CONFIG_VALUE).strip()
+PROXY_URL = environ.get("PROXY_URL", "http://localhost:18080").strip()
+GIPHY_KEY = environ.get("GIPHY_KEY", DEFAULT_CONFIG_VALUE).strip()
+DISCORD_BOT_TOKEN = environ.get("DISCORD_BOT_TOKEN", DEFAULT_CONFIG_VALUE).strip()
+TURNSTILE_SITEKEY = environ.get("TURNSTILE_SITEKEY", DEFAULT_CONFIG_VALUE).strip()
+TURNSTILE_SECRET = environ.get("TURNSTILE_SECRET", DEFAULT_CONFIG_VALUE).strip()
+YOUTUBE_KEY = environ.get("YOUTUBE_KEY", DEFAULT_CONFIG_VALUE).strip()
+PUSHER_ID = environ.get("PUSHER_ID", DEFAULT_CONFIG_VALUE).strip()
+PUSHER_KEY = environ.get("PUSHER_KEY", DEFAULT_CONFIG_VALUE).strip()
+IMGUR_KEY = environ.get("IMGUR_KEY", DEFAULT_CONFIG_VALUE).strip()
+SPAM_SIMILARITY_THRESHOLD = float(environ.get("SPAM_SIMILARITY_THRESHOLD", "0.5").strip())
+SPAM_URL_SIMILARITY_THRESHOLD = float(environ.get("SPAM_URL_SIMILARITY_THRESHOLD", "0.1").strip())
+SPAM_SIMILAR_COUNT_THRESHOLD = int(environ.get("SPAM_SIMILAR_COUNT_THRESHOLD", "10").strip())
+COMMENT_SPAM_SIMILAR_THRESHOLD = float(environ.get("COMMENT_SPAM_SIMILAR_THRESHOLD", "0.5").strip())
+COMMENT_SPAM_COUNT_THRESHOLD = int(environ.get("COMMENT_SPAM_COUNT_THRESHOLD", "10").strip())
+DEFAULT_TIME_FILTER = environ.get("DEFAULT_TIME_FILTER", "all").strip()
+GUMROAD_TOKEN = environ.get("GUMROAD_TOKEN", DEFAULT_CONFIG_VALUE).strip()
+GUMROAD_LINK = environ.get("GUMROAD_LINK", DEFAULT_CONFIG_VALUE).strip()
+GUMROAD_ID = environ.get("GUMROAD_ID", DEFAULT_CONFIG_VALUE).strip()
+DISABLE_DOWNVOTES = bool(int(environ.get("DISABLE_DOWNVOTES", "0").strip()))
+DUES = int(environ.get("DUES", "0").strip())
+DEFAULT_THEME = environ.get("DEFAULT_THEME", "midnight").strip()
+DEFAULT_COLOR = environ.get("DEFAULT_COLOR", "805ad5").strip()
+CARD_VIEW = bool(int(environ.get("CARD_VIEW", "0").strip()))
+EMAIL = environ.get("EMAIL", "blahblahblah@gmail.com").strip()
+MAILGUN_KEY = environ.get("MAILGUN_KEY", DEFAULT_CONFIG_VALUE).strip()
+DESCRIPTION = environ.get("DESCRIPTION", "rdrama.net caters to drama in all forms such as: Real life, videos, photos, gossip, rumors, news sites, Reddit, and Beyond™. There isn't drama we won't touch, and we want it all!").strip()
+CF_KEY = environ.get("CF_KEY", DEFAULT_CONFIG_VALUE).strip()
+CF_ZONE = environ.get("CF_ZONE", DEFAULT_CONFIG_VALUE).strip()
+TELEGRAM_LINK = environ.get("TELEGRAM_LINK", DEFAULT_CONFIG_VALUE).strip()
 GLOBAL = environ.get("GLOBAL", "").strip()
 blackjack = environ.get("BLACKJACK", "").strip()
 FP = environ.get("FP", "").strip()
@@ -50,10 +45,20 @@ KOFI_TOKEN = environ.get("KOFI_TOKEN", "").strip()
 KOFI_LINK = environ.get("KOFI_LINK", "").strip()
 
 PUSHER_ID_CSP = ""
-if PUSHER_ID != "blahblahblah":
+if PUSHER_ID != DEFAULT_CONFIG_VALUE:
 	PUSHER_ID_CSP = f" {PUSHER_ID}.pushnotifications.pusher.com"
-CONTENT_SECURITY_POLICY_DEFAULT = "script-src 'self' 'unsafe-inline' ajax.cloudflare.com; connect-src 'self'; object-src 'none';"
+CONTENT_SECURITY_POLICY_DEFAULT = "script-src 'self' 'unsafe-inline' challenges.cloudflare.com; connect-src 'self'; object-src 'none';"
 CONTENT_SECURITY_POLICY_HOME = f"script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' tls-use1.fpapi.io api.fpjs.io{PUSHER_ID_CSP}; object-src 'none';"
+
+CLOUDFLARE_COOKIE_VALUE = "yes." # remember to change this in CloudFlare too
+
+SETTINGS_FILENAME = '/site_settings.json'
+
+DEFAULT_RATELIMIT = "3/second;30/minute;200/hour;1000/day"
+DEFAULT_RATELIMIT_SLOWER = "1/second;30/minute;200/hour;1000/day"
+DEFAULT_RATELIMIT_USER = DEFAULT_RATELIMIT_SLOWER
+
+PUSHER_LIMIT = 1000 # API allows 10 KB but better safe than sorry
 
 if SITE == "localhost": SITE_FULL = 'http://' + SITE
 else: SITE_FULL = 'https://' + SITE
@@ -62,6 +67,8 @@ else: SITE_FULL = 'https://' + SITE
 if SITE_NAME == 'PCM': CC = "SPLASH MOUNTAIN"
 else: CC = "COUNTRY CLUB"
 CC_TITLE = CC.title()
+
+CASINO_RELEASE_DAY = 1662825600
 
 if SITE_NAME == 'rDrama': patron = 'Paypig'
 else: patron = 'Patron'
@@ -109,6 +116,7 @@ if SITE_NAME == 'rDrama':
 		"retarded": "r-slurred",
 		"retard": "r-slur",
 		"pedophile": "libertarian",
+		"kill youself": "keep yourself safe",
 		"kill yourself": "keep yourself safe",
 		"kill yourselves": "keep yourselves safe",
 		"steve akins": "Dr. Penelope Verity Oaken",
@@ -142,7 +150,8 @@ if SITE_NAME == 'rDrama':
 
 PROFANITIES = {
 	'motherfucker': 'motherlover',
-	'fuck': 'frick',
+	'fuck': ['frick', 'fudge', 'freak'],
+	' ass ': [' butt ', ' backside ', ' bum '],
 	'shitting': 'pooping',
 	'lmao': 'lmbo',
 	'damn': 'darn',
@@ -156,7 +165,8 @@ PROFANITIES = {
 	' cum ': ' c*m ',
 	'orgasm': 'sexual climax',
 	'dick': 'peepee',
-	'cock': 'peepee',
+	'cock ': 'peepee ',
+	'cocks': 'peepees',
 	'penis': 'peepee',
 	'pussy': 'girl peepee',
 	'vagina': 'girl peepee',
@@ -200,6 +210,7 @@ PERMS = { # Minimum admin_level to perform action.
 	'ADMIN_ACTIONS_REVERT': 3,
 	'ADMIN_MOP_VISIBLE': 2,
 	'ADMIN_HOME_VISIBLE': 2,
+	'CHAT_BYPASS_MUTE': 2,
 	'DOMAINS_BAN': 3,
 	'HOLE_CREATE': 0,
 	'FLAGS_REMOVE': 2,
@@ -222,11 +233,11 @@ PERMS = { # Minimum admin_level to perform action.
 	'USER_MERGE': 3, # note: extra check for Aevann
 	'USER_TITLE_CHANGE': 2,
 	'USER_MODERATION_TOOLS_VISIBLE': 2, # note: does not affect API at all
+	'POST_IN_GHOST_THREADS': 1,
 	'POST_TO_CHANGELOG': 1, # note: code contributors can also post to changelog
 	'POST_TO_POLL_THREAD': 2,
 	'POST_BETS': 3,
 	'POST_BETS_DISTRIBUTE': 3, # probably should be the same as POST_BETS but w/e
-	'BYPASS_PIN_LIMIT_IF_TEMPORARY': 2,
 	'VIEW_PENDING_SUBMITTED_MARSEYS': 3,
 	'VIEW_PENDING_SUBMITTED_HATS': 3,
 	'MODERATE_PENDING_SUBMITTED_MARSEYS': 3, # note: there is an extra check so that only """carp""" can approve them
@@ -291,6 +302,8 @@ FEATURES = {
 	'MARKUP_COMMANDS': True,
 	'REPOST_DETECTION': True,
 	'PATRON_ICONS': False,
+	'ASSET_SUBMISSIONS': False,
+	'STREAMERS': False,
 }
 
 WERKZEUG_ERROR_DESCRIPTIONS = {
@@ -301,6 +314,7 @@ WERKZEUG_ERROR_DESCRIPTIONS = {
 	405: "The method is not allowed for the requested URL.",
 	406: "The resource identified by the request is only capable of generating response entities which have content characteristics not acceptable according to the accept headers sent in the request.",
 	409: "A conflict happened while processing the request. The resource might have been modified while the request was being processed.",
+	410: "The requested URL is no longer available on this server and there is no forwarding address. If you followed a link from a foreign page, please contact the author of this page.",
 	413: "The data value transmitted exceeds the capacity limit.",
 	414: "The length of the requested URL exceeds the capacity limit for this server. The request cannot be processed.",
 	415: "The server does not support the media type transmitted in the request.",
@@ -318,6 +332,7 @@ ERROR_TITLES = {
 	405: "Method Not Allowed, BAD.",
 	406: "Too Many Pings fuck off",
 	409: "Cumflict",
+	410: "Gone... and Forgotten",
 	413: "Gayload Too Large",
 	415: "Weird Media Type",
 	418: "I'm a teapot",
@@ -333,6 +348,7 @@ ERROR_MSGS = {
 	405: "idk how anyone gets this error but if you see this, remember to follow @carpathianflorist<br>the original error text here talked about internet gremlins and wtf",
 	406: "Max limit is 5 for comments and 50 for posts (what is it referring to? what does it mean? no one knows)",
 	409: "There's a conflict between what you're trying to do and what you or someone else has done and because of that you can't do what you're trying to do. So maybe like... don't try and do that? Sorry not sorry",
+	410: "You were too slow. The link FUCKING DIED. Request a new one and be more efficient.",
 	413: "That's a heckin' chonker of a file! Please make it smaller or maybe like upload it somewhere else idk<BR>jc wrote this one hi jc!<br>- carp",
 	415: "Please upload only Image, Video, or Audio files!",
 	418: "this really shouldn't happen now that we autoconvert webm files but if it does there's a cool teapot marsey so there's that",
@@ -348,6 +364,7 @@ ERROR_MARSEYS = {
 	405: "marseyretard",
 	406: "marseyrage",
 	409: "marseynoyou",
+	410: "marseyrave",
 	413: "marseychonker2",
 	415: "marseydetective",
 	418: "marseytea",
@@ -369,9 +386,11 @@ COMMENT_BODY_HTML_LENGTH_LIMIT = 20000 # do not make larger than 20000 character
 COMMENT_MAX_DEPTH = 200
 TRANSFER_MESSAGE_LENGTH_LIMIT = 200 # do not make larger than 10000 characters (comment limit) without altering the table
 MIN_REPOST_CHECK_URL_LENGTH = 9 # also change the constant in checkRepost() of submit.js
+CHAT_LENGTH_LIMIT = 1000
 TRUESCORE_DONATE_LIMIT = 100
 COSMETIC_AWARD_COIN_AWARD_PCT = 0.10
-
+TRUESCORE_CHAT_LIMIT = 0
+TRUESCORE_GHOST_LIMIT = 0
 
 LOGGEDIN_ACTIVE_TIME = 15 * 60
 PFP_DEFAULT_MARSEY = True
@@ -396,8 +415,8 @@ KIPPY_ID = 0
 MCCOX_ID = 0
 CHIOBU_ID = 0
 PIZZASHILL_ID = 0
+IMPASSIONATA_ID = 0
 GUMROAD_MESSY = ()
-PIZZA_VOTERS = ()
 IDIO_ID = 0
 CARP_ID = 0
 JOAN_ID = 0
@@ -444,8 +463,8 @@ LEADERBOARD_LIMIT = PAGE_SIZE
 HOUSE_JOIN_COST = 500
 HOUSE_SWITCH_COST = 2000
 
-DONATE_SERVICE = "Gumroad" if not KOFI_TOKEN or  KOFI_TOKEN == 'blahblahblah' else "KoFi"
-DONATE_LINK = GUMROAD_LINK if not KOFI_TOKEN or KOFI_TOKEN == 'blahblahblah' else KOFI_LINK
+DONATE_SERVICE = "Gumroad" if not KOFI_TOKEN or  KOFI_TOKEN == DEFAULT_CONFIG_VALUE else "KoFi"
+DONATE_LINK = GUMROAD_LINK if not KOFI_TOKEN or KOFI_TOKEN == DEFAULT_CONFIG_VALUE else KOFI_LINK
 
 TIERS_ID_TO_NAME = {
 		1: "Paypig",
@@ -456,10 +475,11 @@ TIERS_ID_TO_NAME = {
 		6: "Rich Bich"
 }
 
-if SITE.startswith('rdrama.'):
+if SITE == 'rdrama.net':
 	FEATURES['PRONOUNS'] = True
 	FEATURES['HOUSES'] = True
 	FEATURES['USERS_PERMANENT_WORD_FILTERS'] = True
+	FEATURES['ASSET_SUBMISSIONS'] = True
 	PERMS['ADMIN_ADD'] = 4
 
 	SIDEBAR_THREAD = 37696
@@ -467,6 +487,11 @@ if SITE.startswith('rdrama.'):
 	BADGE_THREAD = 37833
 	SNAPPY_THREAD = 37749
 	NOTIFICATION_THREAD = 6489
+
+	CHAT_LENGTH_LIMIT = 200
+
+	TRUESCORE_CHAT_LIMIT = 10
+	TRUESCORE_GHOST_LIMIT = 10
 
 	HOLE_COST = 50000
 	HOLE_INACTIVITY_DELETION = True
@@ -482,8 +507,8 @@ if SITE.startswith('rdrama.'):
 	MCCOX_ID = 8239
 	CHIOBU_ID = 5214
 	PIZZASHILL_ID = 2424
+	IMPASSIONATA_ID = 5800
 	GUMROAD_MESSY = (1230,1379)
-	PIZZA_VOTERS = (747,1963,9712)
 	IDIO_ID = 30
 	CARP_ID = 995
 	JOAN_ID = 28
@@ -509,6 +534,7 @@ if SITE.startswith('rdrama.'):
 elif SITE == 'pcmemes.net':
 	PIN_LIMIT = 10
 	FEATURES['REPOST_DETECTION'] = False
+	FEATURES['STREAMERS'] = True
 	ERROR_MSGS[500] = "Hiiiii it's <b>nigger</b>! I think this error means that there's a <b>nigger</b> error. And I think that means something took too long to load so it decided to be a <b>nigger</b>. If you keep seeing this on the same page but not other pages, then something its probably a <b>niggerfaggot</b>. It may not be called a <b>nigger</b>, but that sounds right to me. Anyway, ping me and I'll whine to someone smarter to fix it. Don't bother them. Thanks ily &lt;3"
 	ERROR_MARSEYS[500] = "wholesome"
 	POST_RATE_LIMIT = '1/second;4/minute;20/hour;100/day'
@@ -551,14 +577,28 @@ elif SITE == 'watchpeopledie.tv':
 	ERROR_TITLES[404] = "Not Found"
 	ERROR_TITLES[405] = "Method Not Allowed"
 	ERROR_TITLES[406] = "Too Many Pings"
-	ERROR_TITLES[409] = "Conflict"
+	ERROR_TITLES[409] = "Mortal Conflict"
+	ERROR_TITLES[410] = "Dead"
+	ERROR_TITLES[413] = "Payload Too Large"
 	ERROR_TITLES[415] = "Unsupported Media Type"
 	ERROR_TITLES[500] = "Internal Server Error"
+	ERROR_MSGS[400] = "That request is invalid"
+	ERROR_MSGS[401] = "You need to login or sign up to do that"
+	ERROR_MSGS[403] = "You're not allowed to do that"
+	ERROR_MSGS[404] = "That wasn't found"
+	ERROR_MSGS[405] = "You can't use this method here... if you keep getting this error tell us it's prolly something borked"
+	ERROR_MSGS[409] = "There's a conflict between what you're trying to do and what you or someone else has done and because of that you can't do what you're trying to do."
+	ERROR_MSGS[410] = "This link is dead. Request a new one to try again"
+	ERROR_MSGS[413] = "You need to upload a smaller file please"
+	ERROR_MSGS[429] = "Please wait a bit before doing that"
 
 	POLL_THREAD = 13225
 
 	SIDEBAR_THREAD = 5403
 	BANNER_THREAD = 9869
+
+	TRUESCORE_CHAT_LIMIT = 10
+	TRUESCORE_GHOST_LIMIT = 10
 
 	HOLE_NAME = 'flair'
 	HOLE_STYLE_FLAIR = True
@@ -586,9 +626,11 @@ elif SITE == 'watchpeopledie.tv':
 	}
 
 else: # localhost or testing environment implied
+	FEATURES['ASSET_SUBMISSIONS'] = True
 	FEATURES['PRONOUNS'] = True
 	FEATURES['HOUSES'] = True
 	FEATURES['USERS_PERMANENT_WORD_FILTERS'] = True
+	FEATURES['STREAMERS'] = True
 
 HOUSES = ("None","Furry","Femboy","Vampire","Racist") if FEATURES['HOUSES'] else ("None")
 
@@ -955,6 +997,16 @@ AWARDS = {
 		"deflectable": True,
 		"cosmetic": False
 	},
+	"agendaposter": {
+		"kind": "agendaposter",
+		"title": "Chud",
+		"description": "Chuds the recipient for 24 hours.",
+		"icon": "fas fa-snooze",
+		"color": "text-purple",
+		"price": 1000,
+		"deflectable": True,
+		"cosmetic": False
+	},
 	"offsitementions": {
 		"kind": "offsitementions",
 		"title": "Y'all Seein' Eye",
@@ -1052,16 +1104,6 @@ AWARDS = {
 		"icon": "fas fa-spider",
 		"color": "text-brown",
 		"price": 2000,
-		"deflectable": True,
-		"cosmetic": False
-	},
-	"agendaposter": {
-		"kind": "agendaposter",
-		"title": "Chud",
-		"description": "Chuds the recipient for 24 hours.",
-		"icon": "fas fa-snooze",
-		"color": "text-purple",
-		"price": 2500,
 		"deflectable": True,
 		"cosmetic": False
 	},
@@ -1257,6 +1299,12 @@ if SITE_NAME == 'PCM':
 	}
 	AWARDS.update(PCM_AWARDS)
 
+# Permit only cosmetics and pin/unpin on ghosted things.
+for award in AWARDS:
+	AWARDS[award]['ghost'] = AWARDS[award]['cosmetic']
+AWARDS['pin']['ghost'] = True
+AWARDS['unpin']['ghost'] = True
+
 # Disable unused awards, and site-specific award inclusion/exclusion.
 AWARDS_DISABLED = [
 	'fallback', 'ghost', 'nword', 'lootbox', # Generic
@@ -1291,7 +1339,7 @@ HOUSE_AWARDS = {
 	"Vampire": {
 		"kind": "Vampire",
 		"title": "Bite",
-		"description": "Turns the recipient into a vampire for 24 hours.",
+		"description": "Turns the recipient into a vampire for 2 days.",
 		"icon": "fas fa-bat",
 		"color": "text-gray",
 		"price": 400,
@@ -1340,7 +1388,6 @@ if EVENT_ACTIVE:
 			AWARDS_DISABLED.remove(award)
 
 AWARDS2 = {x: AWARDS[x] for x in AWARDS if x not in AWARDS_DISABLED}
-AWARDS3 = {x: AWARDS2[x] for x in AWARDS2 if AWARDS2[x]['price'] <= 500}
 
 DOUBLE_XP_ENABLED = -1 # set to unixtime for when DXP begins, -1 to disable
 
@@ -1360,11 +1407,12 @@ NOTIFIED_USERS = {
 	'carp': CARP_ID,
 	'idio3': IDIO_ID,
 	'idio ': IDIO_ID,
+	'telegram ': IDIO_ID,
 	'the_homocracy': HOMO_ID,
-	'schizocel': SCHIZO_ID,
-	'scitzocel': SCHIZO_ID,
+	'schizo': SCHIZO_ID,
 	'snakes': SNAKES_ID,
 	'sneks': SNAKES_ID,
+	'snekky': SNAKES_ID,
 	'jc': JUSTCOOL_ID,
 	'justcool': JUSTCOOL_ID,
 	'geese': GEESE_ID,
@@ -1372,9 +1420,12 @@ NOTIFIED_USERS = {
 	'kippy': KIPPY_ID,
 	'mccox': MCCOX_ID,
 
+	'lawlz': LAWLZ_ID,
 	'chiobu': CHIOBU_ID,
 	'donger': DONGER_ID,
 	'soren': SOREN_ID,
+	'pizzashill': PIZZASHILL_ID,
+	'impassionata': IMPASSIONATA_ID,
 }
 
 FORTUNE_REPLIES = ('<b style="color:#6023f8">Your fortune: Allah Wills It</b>','<b style="color:#d302a7">Your fortune: Inshallah, Only Good Things Shall Come To Pass</b>','<b style="color:#e7890c">Your fortune: Allah Smiles At You This Day</b>','<b style="color:#7fec11">Your fortune: Your Bussy Is In For A Blasting</b>','<b style="color:#43fd3b">Your fortune: You Will Be Propositioned By A High-Tier Twink</b>','<b style="color:#9d05da">Your fortune: Repent, You Have Displeased Allah And His Vengeance Is Nigh</b>','<b style="color:#f51c6a">Your fortune: Reply Hazy, Try Again</b>','<b style="color:#00cbb0">Your fortune: lmao you just lost 100 coins</b>','<b style="color:#2a56fb">Your fortune: Yikes 😬</b>','<b style="color:#0893e1">Your fortune: You Will Be Blessed With Many Black Bulls</b>','<b style="color:#16f174">Your fortune: NEETmax, The Day Is Lost If You Venture Outside</b>','<b style="color:#fd4d32">Your fortune: A Taste Of Jannah Awaits You Today</b>','<b style="color:#bac200">Your fortune: Watch Your Back</b>','<b style="color:#6023f8">Your fortune: Outlook good</b>','<b style="color:#d302a7">Your fortune: Godly Luck</b>','<b style="color:#e7890c">Your fortune: Good Luck</b>','<b style="color:#7fec11">Your fortune: Bad Luck</b>','<b style="color:#43fd3b">Your fortune: Good news will come to you by mail</b>','<b style="color:#9d05da">Your fortune: Very Bad Luck</b>','<b style="color:#00cbb0">Your fortune: ｷﾀ━━━━━━(ﾟ∀ﾟ)━━━━━━ !!!!</b>','<b style="color:#2a56fb">Your fortune: Better not tell you now</b>','<b style="color:#0893e1">Your fortune: You will meet a dark handsome stranger</b>','<b style="color:#16f174">Your fortune: （　´_ゝ`）ﾌｰﾝ</b>','<b style="color:#fd4d32">Your fortune: Excellent Luck</b>','<b style="color:#bac200">Your fortune: Average Luck</b>')
@@ -1392,7 +1443,7 @@ if len(SITE_NAME) > 5:
 if SITE != 'localhost':
 	REDDIT_NOTIFS_SITE.add(SITE)
 
-if SITE.startswith('rdrama.'):
+if SITE == 'rdrama.net':
 	REDDIT_NOTIFS_SITE.add('marsey')
 	REDDIT_NOTIFS_SITE.add('"r/Drama"')
 	REDDIT_NOTIFS_SITE.add('justice4darrell')
@@ -1430,33 +1481,9 @@ christian_emojis = [':#marseyjesus:',':#marseyimmaculate:',':#marseymothermary:'
 	':#marseycrucified:',':#chadjesus:',':#marseyandjesus:',':#marseyjesus2:',
 	':#marseyorthodoxsmug:',':#marseypastor:',':#marseypope:',]
 
-db = db_session()
-marseys_const = [x[0] for x in db.query(Marsey.name).filter(Marsey.submitter_id==None, Marsey.name!='chudsey').all()]
-marseys_const2 = marseys_const + ['chudsey','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','0','1','2','3','4','5','6','7','8','9','exclamationpoint','period','questionmark']
-
-marseys = db.query(Marsey).filter(Marsey.submitter_id==None).all()
-marsey_mappings = {}
-for marsey in marseys:
-	for tag in marsey.tags.split():
-		if tag in marsey_mappings:
-			marsey_mappings[tag].append(marsey.name)
-		else:
-			marsey_mappings[tag] = [marsey.name]
-db.close()
-
-SNAPPY_MARSEYS = []
-if SITE_NAME != 'PCM':
-	SNAPPY_MARSEYS = [f':#{x}:' for x in marseys_const2]
-
-SNAPPY_QUOTES = []
-if path.isfile(f'snappy_{SITE_NAME}.txt'):
-	with open(f'snappy_{SITE_NAME}.txt', "r", encoding="utf-8") as f:
-		SNAPPY_QUOTES = f.read().split("\n{[para]}\n")
-
 ADMIGGER_THREADS = {SIDEBAR_THREAD, BANNER_THREAD, BADGE_THREAD, SNAPPY_THREAD}
 
 proxies = {"http":PROXY_URL,"https":PROXY_URL}
-
 
 approved_embed_hosts = {
 	SITE,
@@ -1555,7 +1582,7 @@ tiers={
 
 has_sidebar = path.exists(f'files/templates/sidebar_{SITE_NAME}.html')
 has_logo = path.exists(f'files/assets/images/{SITE_NAME}/logo.webp')
-has_app = path.exists(f'files/assets/app_{SITE_NAME}_v2.5.apk')
+has_app = path.exists(f'files/assets/app_{SITE_NAME}_v2.7.apk')
 
 ONLINE_STR = f'{SITE}_online'
 
@@ -1576,77 +1603,106 @@ forced_hats = {
 
 EMAIL_REGEX_PATTERN = '[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{2,63}\.[A-Za-z]{2,63}'
 
-BOOSTED_SITES = {
-	'rdrama.net',
-	BAN_EVASION_DOMAIN,
-	'pcmemes.net',
-	'watchpeopledie.tv',
-	'themotte.org',
-	'quora.com',
-	'cumtown.org',
-	'notabug.io',
-	'talk.lol',
-	'discussions.app',
-	'gab.com',
-	'kiwifarms.net',
-	'gettr.com',
-	'scored.co',
-	'parler.com',
-	'bitchute.com',
-	'4chan.org',
-	'givesendgo.com',
-	'thepinkpill.com',
-	'ovarit.com',
-	'rdrama.cc',
-	'lolcow.farm',
-	'truthsocial.com',
-	'rumble.com',
-	'saidit.net',
-	'kiwifarms.cc',
-	'8kun.top',
-	'goyimtv.tv',
-	'poal.co',
-	'stormfront.org',
-	'arete.network',
-	'poa.st',
-	'lbry.com',
-	'crystal.cafe',
-	'tribel.com',
-	'mstdn.social',
-	'mastodon.online',
-	'steemit.com',
-	'hexbear.net',
-	'raddle.me',
-	'lemmy.ml',
-	'bluelight.org',
-	'incels.is',
-	'groups.google.com',
-	't.me',
-	'web.telegram.org',
-	'news.ycombinator.com',
-	'tigerdroppings.com',
-	'instagram.com',
-	'facebook.com',
-	'twitch.tv',
-	'tiktok.com',
-	'vm.tiktok.com',
-	'github.com',
-	'boards.4channel.org',
-	'boards.4chan.org',
-	'archive.4plebs.org',
-	'lipstickalley.com',
-	'resetera.com',
-	'steamcommunity.com',
-	'nairaland.com',
-	'marsey.club',
-	'odysee.com',
-	'trp.red',
-	'forums.red',
-	'shitposter.club',
-	'sneed.social',
-	'seal.cafe',
-}
+if SITE_NAME == 'rDrama':
+	BOOSTED_SITES = {
+		'rdrama.net',
+		BAN_EVASION_DOMAIN,
+		'pcmemes.net',
+		'watchpeopledie.tv',
+		'themotte.org',
+		'quora.com',
+		'cumtown.org',
+		'notabug.io',
+		'talk.lol',
+		'discussions.app',
+		'gab.com',
+		'kiwifarms.net',
+		'gettr.com',
+		'scored.co',
+		'parler.com',
+		'bitchute.com',
+		'4chan.org',
+		'givesendgo.com',
+		'thepinkpill.com',
+		'ovarit.com',
+		'rdrama.cc',
+		'lolcow.farm',
+		'truthsocial.com',
+		'rumble.com',
+		'saidit.net',
+		'kiwifarms.cc',
+		'8kun.top',
+		'goyimtv.tv',
+		'poal.co',
+		'stormfront.org',
+		'arete.network',
+		'poa.st',
+		'lbry.com',
+		'crystal.cafe',
+		'tribel.com',
+		'mstdn.social',
+		'mastodon.online',
+		'steemit.com',
+		'hexbear.net',
+		'raddle.me',
+		'lemmy.ml',
+		'bluelight.org',
+		'incels.is',
+		'groups.google.com',
+		't.me',
+		'web.telegram.org',
+		'news.ycombinator.com',
+		'tigerdroppings.com',
+		'instagram.com',
+		'facebook.com',
+		'twitch.tv',
+		'tiktok.com',
+		'vm.tiktok.com',
+		'github.com',
+		'boards.4channel.org',
+		'boards.4chan.org',
+		'archive.4plebs.org',
+		'lipstickalley.com',
+		'resetera.com',
+		'steamcommunity.com',
+		'nairaland.com',
+		'marsey.club',
+		'odysee.com',
+		'trp.red',
+		'forums.red',
+		'shitposter.club',
+		'sneed.social',
+		'seal.cafe',
+		'lobste.rs',
+		'stacker.news',
+		'breitbart.com',
+		'tattle.life',
+		'wolfballs.com',
+		'backloggd.com',
+	}
+
+	BOOSTED_HOLES = {
+		'furry',
+		'femboy',
+		'anime',
+		'gaybros',
+		'againsthateholes',
+		'masterbaiters',
+		'changelog',
+	}
+
+	BOOSTED_USERS = {
+		IMPASSIONATA_ID,
+		PIZZASHILL_ID,
+		SNAKES_ID,
+		JUSTCOOL_ID,
+		2008, #TransGirlTradWife
+	}
 
 IMAGE_FORMATS = ['png','gif','jpg','jpeg','webp']
 VIDEO_FORMATS = ['mp4','webm','mov','avi','mkv','flv','m4v','3gp']
 AUDIO_FORMATS = ['mp3','wav','ogg','aac','m4a','flac']
+
+if SECRET_KEY == DEFAULT_CONFIG_VALUE:
+	from warnings import warn
+	warn("Secret key is the default value! Please change it to a secure random number. Thanks <3", RuntimeWarning)

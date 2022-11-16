@@ -1,20 +1,28 @@
 from __future__ import unicode_literals
-from files.helpers.alerts import *
-from files.helpers.sanitize import *
-from files.helpers.const import *
-from files.helpers.regex import *
-from files.helpers.actions import *
-from files.helpers.useractions import *
-from files.helpers.get import *
-from files.helpers.security import *
-from files.mail import *
-from files.__main__ import app, cache, limiter
-import youtube_dl
-from .front import frontlist
+
 import os
-from files.helpers.sanitize import filter_emojis_only
 from shutil import copyfile
+
+import pyotp
 import requests
+import youtube_dl
+
+from files.helpers.actions import *
+from files.helpers.alerts import *
+from files.helpers.const import *
+from files.helpers.get import *
+from files.helpers.mail import *
+from files.helpers.media import process_files, process_image
+from files.helpers.regex import *
+from files.helpers.sanitize import *
+from files.helpers.sanitize import filter_emojis_only
+from files.helpers.security import *
+from files.helpers.useractions import *
+from files.routes.wrappers import *
+
+from .front import frontlist
+from files.__main__ import app, cache, limiter
+
 
 @app.get("/settings")
 @auth_required
@@ -24,12 +32,12 @@ def settings(v):
 @app.get("/settings/personal")
 @auth_required
 def settings_personal(v):
-	return render_template("settings_personal.html", v=v)
+	return render_template("settings/personal.html", v=v)
 
 @app.delete('/settings/background')
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def remove_background(v):
 	if v.background:
 		v.background = None
@@ -37,9 +45,9 @@ def remove_background(v):
 	return {"message": "Background removed!"}
 
 @app.post("/settings/personal")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_personal_post(v):
 	updated = False
 
@@ -64,7 +72,7 @@ def settings_personal_post(v):
 			request_flag = int(time.time())
 			setattr(v, column_name, request_flag)
 			if badge_id: badge_grant(v, badge_id)
-			return render_template("settings_personal.html", v=v, msg=f"You have set the {friendly_name} permanently! Enjoy your new badge!")
+			return render_template("settings/personal.html", v=v, msg=f"You have set the {friendly_name} permanently! Enjoy your new badge!")
 		elif current_value != request_flag:
 			setattr(v, column_name, request_flag)
 			return True
@@ -120,7 +128,6 @@ def settings_personal_post(v):
 	updated = updated or update_flag("sigs_disabled", "sigs_disabled")
 	updated = updated or update_flag("over_18", "over_18")
 	updated = updated or update_flag("is_private", "private")
-	updated = updated or update_flag("is_nofollow", "nofollow")
 
 	if not updated and request.values.get("spider", v.spider) != v.spider and v.spider <= 1:
 		updated = True
@@ -134,38 +141,38 @@ def settings_personal_post(v):
 		v.bio = None
 		v.bio_html = None
 		g.db.add(v)
-		return render_template("settings_personal.html", v=v, msg="Your bio has been updated.")
+		return render_template("settings/personal.html", v=v, msg="Your bio has been updated.")
 
 	elif not updated and request.values.get("sig") == "":
 		v.sig = None
 		v.sig_html = None
 		g.db.add(v)
-		return render_template("settings_personal.html", v=v, msg="Your sig has been updated.")
+		return render_template("settings/personal.html", v=v, msg="Your sig has been updated.")
 
 	elif not updated and request.values.get("friends") == "":
 		v.friends = None
 		v.friends_html = None
 		g.db.add(v)
-		return render_template("settings_personal.html", v=v, msg="Your friends list has been updated.")
+		return render_template("settings/personal.html", v=v, msg="Your friends list has been updated.")
 
 	elif not updated and request.values.get("enemies") == "":
 		v.enemies = None
 		v.enemies_html = None
 		g.db.add(v)
-		return render_template("settings_personal.html", v=v, msg="Your enemies list has been updated.")
+		return render_template("settings/personal.html", v=v, msg="Your enemies list has been updated.")
 
 	elif not updated and v.patron and request.values.get("sig"):
 		sig = request.values.get("sig")[:200].replace('\n','').replace('\r','')
 		sig_html = sanitize(sig)
 		if len(sig_html) > 1000:
-			return render_template("settings_personal.html",
+			return render_template("settings/personal.html",
 								v=v,
 								error="Your sig is too long")
 
 		v.sig = sig[:200]
 		v.sig_html=sig_html
 		g.db.add(v)
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 							v=v,
 							msg="Your sig has been updated.")
 
@@ -175,7 +182,7 @@ def settings_personal_post(v):
 		friends_html = sanitize(friends)
 
 		if len(friends_html) > 2000:
-			return render_template("settings_personal.html",
+			return render_template("settings/personal.html",
 								v=v,
 								error="Your friends list is too long")
 
@@ -189,7 +196,7 @@ def settings_personal_post(v):
 		v.friends = friends[:500]
 		v.friends_html=friends_html
 		g.db.add(v)
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 							v=v,
 							msg="Your friends list has been updated.")
 
@@ -200,7 +207,7 @@ def settings_personal_post(v):
 		enemies_html = sanitize(enemies)
 
 		if len(enemies_html) > 2000:
-			return render_template("settings_personal.html",
+			return render_template("settings/personal.html",
 								v=v,
 								error="Your enemies list is too long")
 
@@ -213,7 +220,7 @@ def settings_personal_post(v):
 		v.enemies = enemies[:500]
 		v.enemies_html=enemies_html
 		g.db.add(v)
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 							v=v,
 							msg="Your enemies list has been updated.")
 
@@ -221,12 +228,12 @@ def settings_personal_post(v):
 	elif not updated and FEATURES['USERS_PROFILE_BODYTEXT'] and \
 			(request.values.get("bio") or request.files.get('file')):
 		bio = request.values.get("bio")[:1500]
-		bio += process_files()
+		bio += process_files(request.files, v)
 		bio = bio.strip()
 		bio_html = sanitize(bio)
 
 		if len(bio_html) > 10000:
-			return render_template("settings_personal.html",
+			return render_template("settings/personal.html",
 								v=v,
 								error="Your bio is too long")
 
@@ -235,7 +242,7 @@ def settings_personal_post(v):
 		v.bio = bio[:1500]
 		v.bio_html=bio_html
 		g.db.add(v)
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 							v=v,
 							msg="Your bio has been updated.")
 
@@ -298,11 +305,11 @@ def filters(v):
 	filters=request.values.get("filters")[:1000].strip()
 
 	if filters == v.custom_filter_list:
-		return render_template("settings_advanced.html", v=v, error="You didn't change anything")
+		return render_template("settings/advanced.html", v=v, error="You didn't change anything")
 
 	v.custom_filter_list=filters
 	g.db.add(v)
-	return render_template("settings_advanced.html", v=v, msg="Your custom filters have been updated.")
+	return render_template("settings/advanced.html", v=v, msg="Your custom filters have been updated.")
 
 
 def set_color(v:User, attr:str, color:Optional[str]):
@@ -311,32 +318,33 @@ def set_color(v:User, attr:str, color:Optional[str]):
 	if color:
 		if color.startswith('#'): color = color[1:]
 		if not color_regex.fullmatch(color):
-			return render_template("settings_personal.html", v=v, error="Invalid color hex code")
+			return render_template("settings/personal.html", v=v, error="Invalid color hex code!")
 		if color and current != color:
 			setattr(v, attr, color)
 			g.db.add(v)
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Color successfully updated!")
 
 
 @app.post("/settings/namecolor")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def namecolor(v):
 	return set_color(v, "namecolor", request.values.get("namecolor"))
 	
 @app.post("/settings/themecolor")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def themecolor(v):
 	return set_color(v, "themecolor", request.values.get("themecolor"))
 
 @app.post("/settings/gumroad")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def gumroad(v):
+	if GUMROAD_TOKEN == DEFAULT_CONFIG_VALUE: abort(404)
 	if not (v.email and v.is_activated):
 		abort(400, f"You must have a verified email to verify {patron} status and claim your rewards!")
 
@@ -369,48 +377,48 @@ def gumroad(v):
 	return {"message": f"{patron} rewards claimed!"}
 
 @app.post("/settings/titlecolor")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def titlecolor(v):
 	return set_color(v, "titlecolor", request.values.get("titlecolor"))
 
 @app.post("/settings/verifiedcolor")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def verifiedcolor(v):
 	if not v.verified: abort(403, "You don't have a checkmark")
-	return set_color(v, "verifiedcolor", "verifiedcolor")
+	return set_color(v, "verifiedcolor", request.values.get("verifiedcolor"))
 
 @app.post("/settings/security")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_security_post(v):
 	if request.values.get("new_password"):
 		if request.values.get("new_password") != request.values.get("cnf_password"):
-			return render_template("settings_security.html", v=v, error="Passwords do not match.")
+			return render_template("settings/security.html", v=v, error="Passwords do not match.")
 
 		if not valid_password_regex.fullmatch(request.values.get("new_password")):
-			return render_template("settings_security.html", v=v, error="Password must be between 8 and 100 characters.")
+			return render_template("settings/security.html", v=v, error="Password must be between 8 and 100 characters.")
 
 		if not v.verifyPass(request.values.get("old_password")):
-			return render_template("settings_security.html", v=v, error="Incorrect password")
+			return render_template("settings/security.html", v=v, error="Incorrect password")
 
 		v.passhash = hash_password(request.values.get("new_password"))
 
 		g.db.add(v)
-		return render_template("settings_security.html", v=v, msg="Your password has been changed.")
+		return render_template("settings/security.html", v=v, msg="Your password has been changed.")
 
 	if request.values.get("new_email"):
 		if not v.verifyPass(request.values.get('password')):
-			return render_template("settings_security.html", v=v, error="Invalid password.")
+			return render_template("settings/security.html", v=v, error="Invalid password.")
 
 		new_email = request.values.get("new_email","").strip().lower()
 
 		if new_email == v.email:
-			return render_template("settings_security.html", v=v, error="This email is already yours!")
+			return render_template("settings/security.html", v=v, error="This email is already yours!")
 
 		url = f"{SITE_FULL}/activate"
 
@@ -428,67 +436,67 @@ def settings_security_post(v):
 									v=v)
 				)
 
-		return render_template("settings_security.html", v=v, msg="Check your email and click the verification link to complete the email change.")
+		return render_template("settings/security.html", v=v, msg="Check your email and click the verification link to complete the email change.")
 
 	if request.values.get("2fa_token"):
 		if not v.verifyPass(request.values.get('password')):
-			return render_template("settings_security.html", v=v, error="Invalid password or token.")
+			return render_template("settings/security.html", v=v, error="Invalid password or token.")
 
 		secret = request.values.get("2fa_secret")
 		x = pyotp.TOTP(secret)
 		if not x.verify(request.values.get("2fa_token"), valid_window=1):
-			return render_template("settings_security.html", v=v, error="Invalid password or token.")
+			return render_template("settings/security.html", v=v, error="Invalid password or token.")
 
 		v.mfa_secret = secret
 		g.db.add(v)
-		return render_template("settings_security.html", v=v, msg="Two-factor authentication enabled.")
+		return render_template("settings/security.html", v=v, msg="Two-factor authentication enabled.")
 
 	if request.values.get("2fa_remove"):
 		if not v.verifyPass(request.values.get('password')):
-			return render_template("settings_security.html", v=v, error="Invalid password or token.")
+			return render_template("settings/security.html", v=v, error="Invalid password or token.")
 
 		token = request.values.get("2fa_remove")
 
 		if not v.validate_2fa(token):
-			return render_template("settings_security.html", v=v, error="Invalid password or token.")
+			return render_template("settings/security.html", v=v, error="Invalid password or token.")
 
 		v.mfa_secret = None
 		g.db.add(v)
-		return render_template("settings_security.html", v=v, msg="Two-factor authentication disabled.")
+		return render_template("settings/security.html", v=v, msg="Two-factor authentication disabled.")
 
 @app.post("/settings/log_out_all_others")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_log_out_others(v):
 	submitted_password = request.values.get("password", "").strip()
 	if not v.verifyPass(submitted_password):
-		return render_template("settings_security.html", v=v, error="Incorrect Password"), 401
+		return render_template("settings/security.html", v=v, error="Incorrect Password"), 401
 
 	v.login_nonce += 1
 	session["login_nonce"] = v.login_nonce
 	g.db.add(v)
-	return render_template("settings_security.html", v=v, msg="All other devices have been logged out")
+	return render_template("settings/security.html", v=v, msg="All other devices have been logged out")
 
 
 @app.post("/settings/images/profile")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_images_profile(v):
-	if request.headers.get("cf-ipcountry") == "T1": abort(403, "Image uploads are not allowed through TOR.")
+	if g.is_tor: abort(403, "Image uploads are not allowed through TOR.")
 
 	file = request.files["profile"]
 
 	name = f'/images/{time.time()}'.replace('.','') + '.webp'
 	file.save(name)
-	highres = process_image(name, patron=v.patron)
+	highres = process_image(name, v)
 
 	if not highres: abort(400)
 
 	name2 = name.replace('.webp', 'r.webp')
 	copyfile(name, name2)
-	imageurl = process_image(name2, resize=100)
+	imageurl = process_image(name2, v, resize=100)
 
 	if not imageurl: abort(400)
 
@@ -503,22 +511,22 @@ def settings_images_profile(v):
 	g.db.add(v)
 
 
-	return render_template("settings_personal.html", v=v, msg="Profile picture successfully updated.")
+	return render_template("settings/personal.html", v=v, msg="Profile picture successfully updated.")
 
 
 @app.post("/settings/images/banner")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
-@auth_required
 @feature_required('USERS_PROFILE_BANNER')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@auth_required
+@ratelimit_user()
 def settings_images_banner(v):
-	if request.headers.get("cf-ipcountry") == "T1": abort(403, "Image uploads are not allowed through TOR.")
+	if g.is_tor: abort(403, "Image uploads are not allowed through TOR.")
 
 	file = request.files["banner"]
 
 	name = f'/images/{time.time()}'.replace('.','') + '.webp'
 	file.save(name)
-	bannerurl = process_image(name, patron=v.patron)
+	bannerurl = process_image(name, v)
 
 	if bannerurl:
 		if v.bannerurl and '/images/' in v.bannerurl:
@@ -527,17 +535,17 @@ def settings_images_banner(v):
 		v.bannerurl = bannerurl
 		g.db.add(v)
 
-	return render_template("settings_personal.html", v=v, msg="Banner successfully updated.")
+	return render_template("settings/personal.html", v=v, msg="Banner successfully updated.")
 
 @app.get("/settings/css")
 @auth_required
 def settings_css_get(v):
-	return render_template("settings_css.html", v=v)
+	return render_template("settings/css.html", v=v)
 
 @app.post("/settings/css")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_css(v):
 	if v.agendaposter: abort(400, "Agendapostered users can't edit CSS!")
 	css = request.values.get("css", v.css).strip().replace('\\', '').strip()[:4000]
@@ -546,25 +554,25 @@ def settings_css(v):
 	v.css = css
 	g.db.add(v)
 
-	return render_template("settings_css.html", v=v)
+	return render_template("settings/css.html", v=v, msg="Custom CSS successfully updated!")
 
 @app.post("/settings/profilecss")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_profilecss(v):
 	profilecss = request.values.get("profilecss", v.profilecss).strip().replace('\\', '').strip()[:4000]
 	valid, error = validate_css(profilecss)
 	if not valid:
-		return render_template("settings_css.html", error=error, v=v)
+		return render_template("settings/css.html", error=error, v=v)
 	v.profilecss = profilecss
 	g.db.add(v)
-	return redirect('/settings/css')
+	return render_template("settings/css.html", v=v, msg="Profile CSS successfully updated!")
 
 @app.get("/settings/security")
 @auth_required
 def settings_security(v):
-	return render_template("settings_security.html",
+	return render_template("settings/security.html",
 						v=v,
 						mfa_secret=pyotp.random_base32() if not v.mfa_secret else None,
 						now=int(time.time())
@@ -581,10 +589,10 @@ def settings_block_user(v):
 	if user.unblockable:
 		if not v.shadowbanned:
 			send_notification(user.id, f"@{v.username} has tried to block you and failed because of your unblockable status!")
-		abort(403, "This user is unblockable.")
+		abort(403, f"@{user.username} is unblockable!")
 
 	if user.id == v.id: abort(400, "You can't block yourself")
-	if user.id == AUTOJANNY_ID: abort(403, "You can't block this user")
+	if user.id == AUTOJANNY_ID: abort(403, f"You can't block @{user.username}")
 	if v.has_blocked(user): abort(409, f"You have already blocked @{user.username}")
 
 	new_block = UserBlock(user_id=v.id, target_id=user.id)
@@ -598,9 +606,9 @@ def settings_block_user(v):
 
 
 @app.post("/settings/unblock")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_unblock_user(v):
 	user = get_user(request.values.get("username"))
 	x = v.has_blocked(user)
@@ -614,27 +622,27 @@ def settings_unblock_user(v):
 @app.get("/settings/apps")
 @auth_required
 def settings_apps(v):
-	return render_template("settings_apps.html", v=v)
+	return render_template("settings/apps.html", v=v)
 
 @app.get("/settings/advanced")
 @auth_required
 def settings_advanced_get(v):
-	return render_template("settings_advanced.html", v=v)
+	return render_template("settings/advanced.html", v=v)
 
 @app.post("/settings/name_change")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @is_not_permabanned
+@ratelimit_user()
 def settings_name_change(v):
 	new_name=request.values.get("name").strip()
 
 	if new_name==v.username:
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 						v=v,
 						error="You didn't change anything")
 
 	if not valid_username_regex.fullmatch(new_name):
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 						v=v,
 						error="This isn't a valid username.")
 
@@ -648,7 +656,7 @@ def settings_name_change(v):
 		).one_or_none()
 
 	if x and x.id != v.id:
-		return render_template("settings_personal.html",
+		return render_template("settings/personal.html",
 						v=v,
 						error=f"Username `{new_name}` is already in use.")
 
@@ -657,17 +665,17 @@ def settings_name_change(v):
 	v.name_changed_utc=int(time.time())
 	g.db.add(v)
 
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Name successfully changed!")
 
 @app.post("/settings/song_change_mp3")
+@feature_required('USERS_PROFILE_SONG')
 @limiter.limit("3/second;10/day")
 @limiter.limit("3/second;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @auth_required
-@feature_required('USERS_PROFILE_SONG')
 def settings_song_change_mp3(v):
 	file = request.files['file']
 	if file.content_type != 'audio/mpeg':
-		return render_template("settings_personal.html", v=v, error="Not a valid MP3 file")
+		return render_template("settings/personal.html", v=v, error="Not a valid MP3 file")
 
 	song = str(time.time()).replace('.','')
 
@@ -677,7 +685,7 @@ def settings_song_change_mp3(v):
 	size = os.stat(name).st_size
 	if size > 8 * 1024 * 1024:
 		os.remove(name)
-		return render_template("settings_personal.html", v=v, error="MP3 file must be smaller than 8MB")
+		return render_template("settings/personal.html", v=v, error="MP3 file must be smaller than 8MB")
 
 	if path.isfile(f"/songs/{v.song}.mp3") and g.db.query(User).filter_by(song=v.song).count() == 1:
 		os.remove(f"/songs/{v.song}.mp3")
@@ -685,13 +693,13 @@ def settings_song_change_mp3(v):
 	v.song = song
 	g.db.add(v)
 
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Profile Anthem successfully updated!")
 
 @app.post("/settings/song_change")
+@feature_required('USERS_PROFILE_SONG')
 @limiter.limit("3/second;10/day")
 @limiter.limit("3/second;10/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @auth_required
-@feature_required('USERS_PROFILE_SONG')
 def settings_song_change(v):
 	song=request.values.get("song").strip()
 
@@ -700,7 +708,7 @@ def settings_song_change(v):
 			os.remove(f"/songs/{v.song}.mp3")
 		v.song = None
 		g.db.add(v)
-		return redirect("/settings/personal")
+		return render_template("settings/personal.html", v=v, msg="Profile Anthem successfully removed!")
 
 	song = song.replace("https://music.youtube.com", "https://youtube.com")
 	if song.startswith(("https://www.youtube.com/watch?v=", "https://youtube.com/watch?v=", "https://m.youtube.com/watch?v=")):
@@ -708,7 +716,7 @@ def settings_song_change(v):
 	elif song.startswith("https://youtu.be/"):
 		id = song.split("https://youtu.be/")[1]
 	else:
-		return render_template("settings_personal.html", v=v, error="Not a youtube link.")
+		return render_template("settings/personal.html", v=v, error="Not a youtube link.")
 
 	if "?" in id: id = id.split("?")[0]
 	if "&" in id: id = id.split("&")[0]
@@ -716,21 +724,21 @@ def settings_song_change(v):
 	if path.isfile(f'/songs/{id}.mp3'): 
 		v.song = id
 		g.db.add(v)
-		return redirect("/settings/personal")
+		return render_template("settings/personal.html", v=v, msg="Profile Anthem successfully updated!")
 		
 	
 	req = requests.get(f"https://www.googleapis.com/youtube/v3/videos?id={id}&key={YOUTUBE_KEY}&part=contentDetails", timeout=5).json()
 	duration = req['items'][0]['contentDetails']['duration']
 	if duration == 'P0D':
-		return render_template("settings_personal.html", v=v, error="Can't use a live youtube video!")
+		return render_template("settings/personal.html", v=v, error="Can't use a live youtube video!")
 
 	if "H" in duration:
-		return render_template("settings_personal.html", v=v, error="Duration of the video must not exceed 15 minutes.")
+		return render_template("settings/personal.html", v=v, error="Duration of the video must not exceed 15 minutes.")
 
 	if "M" in duration:
 		duration = int(duration.split("PT")[1].split("M")[0])
 		if duration > 15: 
-			return render_template("settings_personal.html", v=v, error="Duration of the video must not exceed 15 minutes.")
+			return render_template("settings/personal.html", v=v, error="Duration of the video must not exceed 15 minutes.")
 
 
 	if v.song and path.isfile(f"/songs/{v.song}.mp3") and g.db.query(User).filter_by(song=v.song).count() == 1:
@@ -750,7 +758,7 @@ def settings_song_change(v):
 		try: ydl.download([f"https://youtube.com/watch?v={id}"])
 		except Exception as e:
 			print(e, flush=True)
-			return render_template("settings_personal.html",
+			return render_template("settings/personal.html",
 						v=v,
 						error="Age-restricted videos aren't allowed.")
 
@@ -761,48 +769,48 @@ def settings_song_change(v):
 
 	v.song = id
 	g.db.add(v)
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Profile Anthem successfully updated!")
 
 @app.post("/settings/title_change")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_title_change(v):
 	if v.flairchanged: abort(403)
 	
 	customtitleplain = sanitize_settings_text(request.values.get("title"), 100)
 	if customtitleplain == v.customtitleplain:
-		return render_template("settings_personal.html", v=v, error="You didn't change anything")
+		return render_template("settings/personal.html", v=v, error="You didn't change anything")
 
 	customtitle = filter_emojis_only(customtitleplain)
 	customtitle = censor_slurs(customtitle, None)
 
 	if len(customtitle) > 1000:
-		return render_template("settings_personal.html", v=v, error="Flair too long!")
+		return render_template("settings/personal.html", v=v, error="Flair too long!")
 
 	v.customtitleplain = customtitleplain
 	v.customtitle = customtitle
 	g.db.add(v)
 
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Flair successfully updated!")
 
 
 @app.post("/settings/pronouns_change")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
-@auth_required
 @feature_required('PRONOUNS')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@auth_required
+@ratelimit_user()
 def settings_pronouns_change(v):
 	pronouns = sanitize_settings_text(request.values.get("pronouns"))
 
 	if len(pronouns) > 11:
-		return render_template("settings_personal.html", v=v, error="Your pronouns exceed the character limit (11 characters)")
+		return render_template("settings/personal.html", v=v, error="Your pronouns exceed the character limit (11 characters)")
 
 	if pronouns == v.pronouns:
-		return render_template("settings_personal.html", v=v, error="You didn't change anything.")
+		return render_template("settings/personal.html", v=v, error="You didn't change anything.")
 
 	if not pronouns_regex.fullmatch(pronouns):
-		return render_template("settings_personal.html", v=v, error="The pronouns you entered don't match the required format.")
+		return render_template("settings/personal.html", v=v, error="The pronouns you entered don't match the required format.")
 
 	bare_pronouns = pronouns.lower().replace('/', '')
 	if 'nig' in bare_pronouns: pronouns = 'BI/POC'
@@ -811,18 +819,18 @@ def settings_pronouns_change(v):
 	v.pronouns = pronouns
 	g.db.add(v)
 
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Pronouns successfully updated!")
 
 
 @app.post("/settings/checkmark_text")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def settings_checkmark_text(v):
 	if not v.verified: abort(403)
-	new_name = sanitize_settings_text(request.values.get("title"), 100)
+	new_name = sanitize_settings_text(request.values.get("checkmark-text"), 100)
 	if not new_name: abort(400)
-	if new_name == v.verified: return render_template("settings_personal.html", v=v, error="You didn't change anything")
+	if new_name == v.verified: return render_template("settings/personal.html", v=v, error="You didn't change anything")
 	v.verified = new_name
 	g.db.add(v)
-	return redirect("/settings/personal")
+	return render_template("settings/personal.html", v=v, msg="Checkmark Text successfully updated!")

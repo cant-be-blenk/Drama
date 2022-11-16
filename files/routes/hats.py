@@ -1,14 +1,14 @@
-from files.__main__ import app, limiter
+from sqlalchemy import func
+
 from files.classes.hats import *
 from files.helpers.alerts import *
-from files.helpers.wrappers import *
 from files.helpers.const import *
 from files.helpers.useractions import *
-from flask import g
+from files.routes.wrappers import *
+from files.__main__ import app, limiter
 
 @app.get("/hats")
 @auth_required
-@feature_required('HATS')
 def hats(v):
 	owned_hat_ids = [x.hat_id for x in v.owned_hats]
 
@@ -34,7 +34,6 @@ def hats(v):
 @app.post("/buy_hat/<hat_id>")
 @limiter.limit('100/minute;1000/3 days')
 @auth_required
-@feature_required('HATS')
 def buy_hat(v, hat_id):
 	try: hat_id = int(hat_id)
 	except: abort(404, "Hat not found!")
@@ -43,7 +42,7 @@ def buy_hat(v, hat_id):
 	if not hat: abort(404, "Hat not found!")
 
 	existing = g.db.query(Hat).filter_by(user_id=v.id, hat_id=hat.id).one_or_none()
-	if existing: abort(400, "You already own this hat!")
+	if existing: abort(409, "You already own this hat!")
 
 	if not hat.is_purchasable:
 		abort(403, "This hat is not for sale.")
@@ -85,7 +84,6 @@ def buy_hat(v, hat_id):
 
 @app.post("/equip_hat/<hat_id>")
 @auth_required
-@feature_required('HATS')
 def equip_hat(v, hat_id):
 	try: hat_id = int(hat_id)
 	except: abort(404, "Hat not found!")
@@ -100,7 +98,6 @@ def equip_hat(v, hat_id):
 
 @app.post("/unequip_hat/<hat_id>")
 @auth_required
-@feature_required('HATS')
 def unequip_hat(v, hat_id):
 	try: hat_id = int(hat_id)
 	except: abort(404, "Hat not found!")
@@ -117,7 +114,7 @@ def unequip_hat(v, hat_id):
 @auth_required
 def hat_owners(v, hat_id):
 	try: hat_id = int(hat_id)
-	except: abort(400)
+	except: abort(404, "Hat not found!")
 
 	try: page = int(request.values.get("page", 1))
 	except: page = 1

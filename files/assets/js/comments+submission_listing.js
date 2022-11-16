@@ -7,7 +7,7 @@ function pinned_timestamp(id) {
 
 /** @type {HTMLImageElement} */
 const popClickBadgeTemplateDOM = document.createElement("IMG");
-popClickBadgeTemplateDOM.width = 32;
+popClickBadgeTemplateDOM.classList.add("pop-badge");
 popClickBadgeTemplateDOM.loading = "lazy";
 popClickBadgeTemplateDOM.alt = "badge";
 
@@ -58,6 +58,7 @@ function popclick(e) {
 		popover.getElementsByClassName('pop-commentcount')[0].innerHTML = author["comment_count"]
 		popover.getElementsByClassName('pop-coins')[0].innerHTML = author["coins"]
 		popover.getElementsByClassName('pop-viewmore')[0].href = author["url"]
+		popover.getElementsByClassName('pop-created-date')[0].innerHTML = author["created_date"]
 	}, 5);
 }
 
@@ -76,6 +77,9 @@ function post(url) {
 };
 
 function poll_vote_0(oid, parentid, kind) {
+	for(let el of document.getElementsByClassName('presult-'+parentid)) {
+		el.classList.remove('d-none');
+	}
 	const full_oid = kind + '-' + oid
 	const type = document.getElementById(full_oid).checked;
 	const scoretext = document.getElementById('score-' + full_oid);
@@ -86,6 +90,9 @@ function poll_vote_0(oid, parentid, kind) {
 }
 
 function poll_vote_1(oid, parentid, kind) {
+	for(let el of document.getElementsByClassName('presult-'+parentid)) {
+		el.classList.remove('d-none');
+	}
 	const full_oid = kind + '-' + oid
 	let curr = document.getElementById(`current-${kind}-${parentid}`)
 	if (curr && curr.value)

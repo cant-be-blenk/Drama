@@ -1,4 +1,4 @@
-{%- import 'util/helpers.html' as help -%}
+{%- import 'util/macros.html' as macros with context -%}
 {%- import 'html_head.html' as html_head with context -%}
 <!DOCTYPE html>
 <html lang="en">
@@ -23,7 +23,7 @@
 
 										<div class="body">
 
-												<input type="hidden" name="formkey" value="{{v.formkey}}">
+												<input type="hidden" name="formkey" value="{{v|formkey}}">
 
 												<label class='mt-4' for="title">{{HOLE_NAME|capitalize}}</label>
 
@@ -56,10 +56,10 @@
 													<img loading="lazy" id="image-preview" style="max-width:50%">
 													<label class="btn btn-secondary m-0" for="file-upload">
 														<div id="filename-show">Select File</div>
-														<input autocomplete="off" id="file-upload" accept="image/*, video/*, audio/*" type="file" name="file-url" {% if request.headers.get('cf-ipcountry')=="T1" %}disabled{% endif %} hidden>
+														<input autocomplete="off" id="file-upload" accept="image/*, video/*, audio/*" type="file" name="file-url" {% if g.is_tor %}disabled{% endif %} hidden>
 													</label>
 													<small class="form-text text-muted">Optional if you have text.</small>
-													<small class="form-text text-muted">You can upload images or videos.</small>
+													<small class="form-text text-muted">You can upload images, videos, or audio.</small>
 												</div>
 												</div>
 
@@ -82,7 +82,7 @@
 																
 												<label class="format btn btn-secondary m-0 ml-1 {% if v %}d-inline-block{% else %}d-none{% endif %}" for="file-upload-submit">
 													<div id="filename-show-submit"><i class="fas fa-file"></i></div>
-													<input autocomplete="off" id="file-upload-submit" multiple="multiple" accept="image/*, video/*, audio/*" type="file" name="file" {% if request.headers.get('cf-ipcountry')=="T1" %}disabled{% endif %} onchange="changename('filename-show-submit','file-upload-submit');checkForRequired()" hidden>
+													<input autocomplete="off" id="file-upload-submit" multiple="multiple" accept="image/*, video/*, audio/*" type="file" name="file" {% if g.is_tor %}disabled{% endif %} onchange="changename('filename-show-submit','file-upload-submit');checkForRequired()" hidden>
 												</label>		
 
 												<div id="preview" class="preview my-3"></div>
@@ -91,6 +91,7 @@
 
 												<div class="custom-control custom-checkbox">
 													<input autocomplete="off" type="checkbox" class="custom-control-input" id="post-notify" name="notify" onchange="savetext()" checked>
+													<input type="hidden" name="notify" value="off">
 													<label class="custom-control-label" for="post-notify">Notify followers</label>
 												</div>
 
@@ -104,7 +105,7 @@
 													<label class="custom-control-label" for="post-nsfw">+18</label>
 												</div>
 												<div class="custom-control custom-checkbox">
-													<input onchange='draft(this);' autocomplete="off" type="checkbox" class="custom-control-input" id="post-private" name="private" onchange="savetext()">
+													<input autocomplete="off" type="checkbox" class="custom-control-input" id="post-private" name="private" onchange="savetext()">
 													<label class="custom-control-label" for="post-private">Draft</label>
 												</div>
 
@@ -116,8 +117,10 @@
 												{%- endif %}
 
 												<div class="custom-control custom-checkbox mb-5">
-													<input onchange='draft(this);' autocomplete="off" type="checkbox" class="custom-control-input" id="post-ghost" name="ghost" {% if v.coins < 100 %}disabled{% endif %}>
-													<label class="custom-control-label" for="post-ghost">Ghost thread (cost: 100 coins)</label>
+													{% if v.can_post_in_ghost_threads %}
+														<input onchange='ghost_toggle(this)' autocomplete="off" type="checkbox" class="custom-control-input" id="post-ghost" name="ghost">
+														<label class="custom-control-label" for="post-ghost">Ghost thread</label>
+													{% endif %}
 												</div>
 										</div>
 
@@ -151,8 +154,8 @@
 
 		<script defer src="{{'js/marked.js' | asset}}"></script>
 		<script defer src="{{'js/submit.js' | asset}}"></script>
-		{% include "emoji_modal.html" %}
-		{% include "gif_modal.html" %}
+		{% include "modals/emoji.html" %}
+		{% include "modals/gif.html" %}
 
 </body>
 

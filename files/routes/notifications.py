@@ -1,11 +1,17 @@
-from files.helpers.wrappers import *
-from files.helpers.get import *
-from files.helpers.const import *
-from files.__main__ import app
 import time
+
+from sqlalchemy.sql.expression import not_, and_, or_
+
+from files.classes.mod_logs import ModAction
+from files.classes.sub_logs import SubAction
+from files.helpers.const import *
+from files.helpers.get import *
+from files.routes.wrappers import *
+from files.__main__ import app
 
 @app.post("/clear")
 @auth_required
+@ratelimit_user()
 def clear(v):
 	notifs = g.db.query(Notification).join(Notification.comment).filter(Notification.read == False, Notification.user_id == v.id).all()
 	for n in notifs:
@@ -19,6 +25,7 @@ def clear(v):
 
 @app.get("/unread")
 @auth_required
+@ratelimit_user()
 def unread(v):
 	listing = g.db.query(Notification, Comment).join(Notification.comment).filter(
 		Notification.read == False,
@@ -31,8 +38,7 @@ def unread(v):
 		n.read = True
 		g.db.add(n)
 
-	return {"data":[x[1].json for x in listing]}
-
+	return {"data":[x[1].json(g.db) for x in listing]}
 
 
 @app.get("/notifications/modmail")
@@ -47,7 +53,7 @@ def notifications_modmail(v):
 
 	g.db.commit()
 
-	if v.client: return {"data":[x.json for x in listing]}
+	if v.client: return {"data":[x.json(g.db) for x in listing]}
 
 	return render_template("notifications.html",
 							v=v,
@@ -117,7 +123,7 @@ def notifications_messages(v):
 		c.unread = True
 		list_to_perserve_unread_attribute.append(c)
 
-	if v.client: return {"data":[x.json for x in listing]}
+	if v.client: return {"data":[x.json(g.db) for x in listing]}
 
 	return render_template("notifications.html",
 							v=v,
@@ -151,7 +157,7 @@ def notifications_posts(v):
 
 	next_exists = (len(listing) > 25)
 	listing = listing[:25]
-	listing = get_posts(listing, v=v)
+	listing = get_posts(listing, v=v, eager=True)
 
 	for p in listing:
 		p.unread = p.created_utc > v.last_viewed_post_notifs
@@ -159,7 +165,7 @@ def notifications_posts(v):
 	v.last_viewed_post_notifs = int(time.time())
 	g.db.add(v)
 
-	if v.client: return {"data":[x.json for x in listing]}
+	if v.client: return {"data":[x.json(g.db) for x in listing]}
 
 	return render_template("notifications.html",
 							v=v,
@@ -172,13 +178,24 @@ def notifications_posts(v):
 
 
 @app.get("/notifications/modactions")
-@admin_level_required(PERMS['NOTIFICATIONS_MODERATOR_ACTIONS'])
+@auth_required
 def notifications_modactions(v):
 	try: page = max(int(request.values.get("page", 1)), 1)
 	except: page = 1
 
-	listing = g.db.query(ModAction).filter(ModAction.user_id != v.id).order_by(ModAction.id.desc()).offset(PAGE_SIZE*(page-1)).limit(PAGE_SIZE+1).all()
+	if v.admin_level >= PERMS['NOTIFICATIONS_MODERATOR_ACTIONS']:
+		cls = ModAction
+	elif v.moderated_subs:
+		cls = SubAction
+	else:
+		abort(403)
 
+	listing = g.db.query(cls).filter(cls.user_id != v.id)
+
+	if cls == SubAction:
+		listing = listing.filter(cls.sub.in_(v.moderated_subs))
+
+	listing = listing.order_by(cls.id.desc()).offset(PAGE_SIZE*(page-1)).limit(PAGE_SIZE+1).all()
 	next_exists = len(listing) > PAGE_SIZE
 	listing = listing[:PAGE_SIZE]
 
@@ -230,7 +247,7 @@ def notifications_reddit(v):
 
 	g.db.commit()
 
-	if v.client: return {"data":[x.json for x in listing]}
+	if v.client: return {"data":[x.json(g.db) for x in listing]}
 
 	return render_template("notifications.html",
 							v=v,
@@ -250,14 +267,19 @@ def notifications(v):
 	try: page = max(int(request.values.get("page", 1)), 1)
 	except: page = 1
 
-	comments = g.db.query(Comment, Notification).join(Notification.comment).filter(
+	comments = g.db.query(Comment, Notification).join(Notification.comment).join(Comment.author).filter(
 		Notification.user_id == v.id,
 		Comment.is_banned == False,
 		Comment.deleted_utc == 0,
 		Comment.body_html.notlike('%<p>New site mention%<a href="https://old.reddit.com/r/%'),
 		or_(Comment.sentto == None, Comment.sentto == 2),
-	).order_by(Notification.created_utc.desc())
+		not_(and_(Comment.sentto == 2, User.is_muted)),
+	)
 
+	if v.admin_level < PERMS['USER_SHADOWBAN']:
+		comments = comments.filter(User.shadowbanned == None)
+
+	comments = comments.order_by(Notification.created_utc.desc())
 	comments = comments.offset(PAGE_SIZE * (page - 1)).limit(PAGE_SIZE+1).all()
 
 	next_exists = (len(comments) > PAGE_SIZE)
@@ -296,7 +318,7 @@ def notifications(v):
 
 	g.db.commit()
 
-	if v.client: return {"data":[x.json for x in listing]}
+	if v.client: return {"data":[x.json(g.db) for x in listing]}
 
 	return render_template("notifications.html",
 							v=v,

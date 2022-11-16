@@ -1,10 +1,13 @@
-from files.classes import *
+from sys import stdout
+
 from flask import g
-from .sanitize import *
+from pusher_push_notifications import PushNotifications
+
+from files.classes import Comment, Notification
+
 from .const import *
 from .regex import *
-from pusher_push_notifications import PushNotifications
-from sys import stdout
+from .sanitize import *
 
 def create_comment(text_html):
 	new_comment = Comment(author_id=AUTOJANNY_ID,
@@ -100,12 +103,14 @@ def NOTIFY_USERS(text, v):
 
 	return notify_users - bots
 
-if PUSHER_ID != 'blahblahblah':
+if PUSHER_ID != DEFAULT_CONFIG_VALUE:
 	beams_client = PushNotifications(instance_id=PUSHER_ID, secret_key=PUSHER_KEY)
 
 	def pusher_thread(interests, title, notifbody, url):
 		title = censor_slurs(title, None)
 		notifbody = censor_slurs(notifbody, None)
+		if len(notifbody) > PUSHER_LIMIT:
+			notifbody = notifbody[:PUSHER_LIMIT] + "..."
 
 		beams_client.publish_to_interests(
 			interests=[interests],

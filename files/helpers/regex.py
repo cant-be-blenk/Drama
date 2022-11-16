@@ -1,8 +1,9 @@
 import random
 import re
-from typing import List, Literal, Optional, Union
-from .const import *
 from random import choice, choices
+from typing import List, Optional, Union
+
+from .const import *
 
 valid_username_chars = 'a-zA-Z0-9_\-'
 valid_username_regex = re.compile("^[a-zA-Z0-9_\-]{3,25}$", flags=re.A)
@@ -116,6 +117,8 @@ pronouns_regex = re.compile("([a-z]{1,5})/[a-z]{1,5}(/[a-z]{1,5})?", flags=re.A|
 
 knowledgebase_page_regex = re.compile("[a-zA-Z0-9_\-]+", flags=re.A)
 
+html_title_regex = re.compile("<title>(.{1,200})</title>", flags=re.I)
+
 def sub_matcher(match:re.Match, upper=False, replace_with:Union[dict[str, str], dict[str, List[str]]]=SLURS):
 	group_num = 0
 	match_str = match.group(group_num)
@@ -123,6 +126,8 @@ def sub_matcher(match:re.Match, upper=False, replace_with:Union[dict[str, str], 
 		return match_str
 	else:
 		repl = replace_with[match_str.lower()]
+		if not isinstance(repl, str):
+			repl = random.choice(repl)
 		return repl if not upper or "<img" in repl else repl.upper()
 
 def sub_matcher_upper(match, replace_with:Union[dict[str, str], dict[str, List[str]]]=SLURS):

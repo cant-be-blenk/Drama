@@ -1,9 +1,9 @@
-from files.helpers.wrappers import *
-from files.helpers.get import *
-from files.helpers.const import *
 from files.classes import *
-from flask import *
-from files.__main__ import app, limiter, cache
+from files.helpers.const import *
+from files.helpers.get import *
+from files.routes.wrappers import *
+from files.__main__ import app, limiter
+
 
 @app.get("/votes/<link>")
 @admin_level_required(PERMS['VOTES_VISIBLE'])
@@ -17,21 +17,19 @@ def vote_info_get(v, link):
 	if thing.ghost and v.id != AEVANN_ID: abort(403)
 
 	if isinstance(thing, Submission):
-		if thing.author.shadowbanned and not (v and v.admin_level):
+		if thing.author.shadowbanned and not (v and v.admin_level >= PERMS['USER_SHADOWBAN']):
 			thing_id = g.db.query(Submission.id).filter_by(upvotes=thing.upvotes, downvotes=thing.downvotes).order_by(Submission.id).first()[0]
 		else: thing_id = thing.id
 
 		ups = g.db.query(Vote).filter_by(submission_id=thing_id, vote_type=1).order_by(Vote.created_utc).all()
-
 		downs = g.db.query(Vote).filter_by(submission_id=thing_id, vote_type=-1).order_by(Vote.created_utc).all()
 
 	elif isinstance(thing, Comment):
-		if thing.author.shadowbanned and not (v and v.admin_level):
+		if thing.author.shadowbanned and not (v and v.admin_level >= PERMS['USER_SHADOWBAN']):
 			thing_id = g.db.query(Comment.id).filter_by(upvotes=thing.upvotes, downvotes=thing.downvotes).order_by(Comment.id).first()[0]
 		else: thing_id = thing.id
 
 		ups = g.db.query(CommentVote).filter_by(comment_id=thing_id, vote_type=1).order_by(CommentVote.created_utc).all()
-
 		downs = g.db.query(CommentVote).filter_by(comment_id=thing_id, vote_type=-1 ).order_by(CommentVote.created_utc).all()
 
 	else: abort(400)
@@ -56,9 +54,15 @@ def vote_post_comment(target_id, new, v, cls, vote_cls):
 	else:
 		abort(404)
 
+	if target.author.shadowbanned and not v.can_see_shadowbanned:
+		abort(404)
+
 	coin_delta = 1
 	if v.id == target.author.id:
 		coin_delta = 0
+
+	if target.author.id in v.alt_ids or v.id in target.author.alt_ids:
+		coin_delta = -1
 
 	coin_mult = 1
 
@@ -141,11 +145,21 @@ def vote_post_comment(target_id, new, v, cls, vote_cls):
 	if SITE_NAME == 'rDrama':
 		target.realupvotes = get_vote_count(0, True) # first arg is ignored here
 
-		if target.author.progressivestack or (cls == Submission and (target.domain.endswith('.win') or target.domain in BOOSTED_SITES or len(target.body) > 5000 or target.sub == 'masterbaiters')):
-			target.realupvotes *= 2
+		mul = 1
+		if target.author.progressivestack or target.author.id in BOOSTED_USERS:
+			mul = 2
+		elif cls == Submission:
+			if target.domain.endswith('.win') or target.domain in BOOSTED_SITES or target.sub in BOOSTED_HOLES:
+				mul = 2
+			elif target.sub and target.sub not in ('space','istory','dino','slackernews'):
+				mul = 0.7
+			elif not target.sub and len(target.body) > 2000:
+				x = target.body_html.count('" target="_blank" rel="nofollow noopener">')
+				x += target.body_html.count('<a href="/images/')
+				mul = 1 + x/20
 
-		if cls == Submission and target.sub and target.sub not in ('space', 'istory', 'dinos', 'furry', 'anime', 'slackernews', 'gaybros', 'againsthateholes', 'femboy'):
-			target.realupvotes = int(target.realupvotes * 0.7)
+		mul = min(mul, 2)
+		target.realupvotes *= mul
 
 	g.db.add(target)
 	return "", 204

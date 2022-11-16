@@ -1,11 +1,14 @@
-from sqlalchemy import *
-from sqlalchemy.orm import relationship
-from files.__main__ import Base
-from files.helpers.lazy import lazy
-from os import environ
-from .sub_block import *
-from .sub_subscription import *
 import time
+from os import environ
+
+from sqlalchemy import Column
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql.sqltypes import *
+
+from files.classes import Base
+from files.helpers.lazy import lazy
+
+from .sub_relationship import *
 
 SITE_NAME = environ.get("SITE_NAME", '').strip()
 SITE = environ.get("SITE", '').strip()
@@ -26,6 +29,7 @@ class Sub(Base):
 
 	blocks = relationship("SubBlock", primaryjoin="SubBlock.sub==Sub.name")
 	followers = relationship("SubSubscription", primaryjoin="SubSubscription.sub==Sub.name")
+	joins = relationship("SubJoin", lazy="dynamic", primaryjoin="SubJoin.sub==Sub.name")
 
 	def __init__(self, *args, **kwargs):
 		if "created_utc" not in kwargs: kwargs["created_utc"] = int(time.time())
@@ -54,8 +58,8 @@ class Sub(Base):
 
 	@property
 	@lazy
-	def subscription_num(self):
-		return self.subscriptions.count()
+	def join_num(self):
+		return self.joins.count()
 
 	@property
 	@lazy

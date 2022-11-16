@@ -1,18 +1,22 @@
 import functools
+import random
+import re
+import signal
+from functools import partial
+from os import path
+from urllib.parse import parse_qs, urlparse
+
 import bleach
-from bs4 import BeautifulSoup
 from bleach.css_sanitizer import CSSSanitizer
 from bleach.linkifier import LinkifyFilter
-from functools import partial
-from .get import *
-from os import path, environ
-import re
+from bs4 import BeautifulSoup
 from mistletoe import markdown
-from json import loads, dump
-from random import random, choice
-import signal
-import time
-import requests
+from files.classes.domains import BannedDomain
+
+from files.helpers.const import *
+from files.helpers.const_stateful import *
+from files.helpers.regex import *
+from .get import *
 
 TLDS = ( # Original gTLDs and ccTLDs
 	'ac','ad','ae','aero','af','ag','ai','al','am','an','ao','aq','ar','arpa','as','asia','at',
@@ -34,7 +38,7 @@ TLDS = ( # Original gTLDs and ccTLDs
 	# New gTLDs
 	'app','cleaning','club','dev','farm','florist','fun','gay','lgbt','life','lol',
 	'moe','mom','monster','new','news','online','pics','press','pub','site',
-	'vip','win','world','wtf','xyz',
+	'vip','win','world','wtf','xyz', 'video',
 	)
 
 allowed_tags = ('b','blockquote','br','code','del','em','h1','h2','h3','h4','h5','h6','hr','i',
@@ -160,12 +164,12 @@ def render_emoji(html, regexp, golden, marseys_used, b=False):
 		attrs = ''
 		if b: attrs += ' b'
 		if golden and len(emojis) <= 20 and ('marsey' in emoji or emoji in marseys_const2):
-			if random() < 0.0025: attrs += ' g'
-			elif random() < 0.00125: attrs += ' glow'
+			if random.random() < 0.0025: attrs += ' g'
+			elif random.random() < 0.00125: attrs += ' glow'
 
 		old = emoji
 		emoji = emoji.replace('!','').replace('#','')
-		if emoji == 'marseyrandom': emoji = choice(marseys_const2)
+		if emoji == 'marseyrandom': emoji = random.choice(marseys_const2)
 
 		emoji_partial_pat = '<img loading="lazy" alt=":{0}:" src="{1}"{2}>'
 		emoji_partial = '<img loading="lazy" data-bs-toggle="tooltip" alt=":{0}:" title=":{0}:" src="{1}"{2}>'
@@ -241,7 +245,7 @@ def sanitize(sanitized, golden=True, limit_pings=0, showmore=True, count_marseys
 
 	if torture:
 		sanitized = torture_ap(sanitized, g.v.username)
-		emoji = choice(['trumpjaktalking', 'reposthorse'])
+		emoji = random.choice(['trumpjaktalking', 'reposthorse'])
 		sanitized += f'\n:#{emoji}:'
 
 	sanitized = normalize_url(sanitized)
@@ -347,8 +351,6 @@ def sanitize(sanitized, golden=True, limit_pings=0, showmore=True, count_marseys
 	sanitized = render_emoji(sanitized, emoji_regex2, golden, marseys_used)
 
 	sanitized = sanitized.replace('&amp;','&')
-
-	if "https://youtube.com/watch?v=" in sanitized: sanitized = sanitized.replace("?t=", "&t=")
 
 	captured = []
 	for i in youtube_regex.finditer(sanitized):

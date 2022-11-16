@@ -1,28 +1,30 @@
-from typing import Literal
-import qrcode
 import io
-import time
-import math
-from files.classes.leaderboard import Leaderboard
-from files.classes.views import *
-from files.classes.transactions import *
-from files.helpers.alerts import *
-from files.helpers.sanitize import *
-from files.helpers.const import *
-from files.helpers.sorting_and_time import *
-from files.helpers.actions import *
-from files.mail import *
-from flask import *
-from files.__main__ import app, limiter, db_session
-import sqlalchemy
-from sqlalchemy.orm import aliased
-from sqlalchemy import desc
-from collections import Counter
-import gevent
-from sys import stdout
-import os
 import json
-from .login import check_for_alts
+import math
+import time
+from collections import Counter
+from typing import Literal
+
+import gevent
+import qrcode
+from sqlalchemy.orm import aliased
+
+from files.classes import *
+from files.classes.leaderboard import Leaderboard
+from files.classes.transactions import *
+from files.classes.views import *
+from files.helpers.actions import execute_blackjack
+from files.helpers.alerts import *
+from files.helpers.const import *
+from files.helpers.mail import *
+from files.helpers.sanitize import *
+from files.helpers.sorting_and_time import *
+from files.helpers.useractions import badge_grant
+from files.routes.routehelpers import check_for_alts
+from files.routes.wrappers import *
+
+from files.__main__ import app, cache, limiter
+
 
 def upvoters_downvoters(v, username, uid, cls, vote_cls, vote_dir, template, standalone):
 	u = get_user(username, v=v, include_shadowbanned=False)
@@ -44,7 +46,7 @@ def upvoters_downvoters(v, username, uid, cls, vote_cls, vote_dir, template, sta
 	listing = listing[:PAGE_SIZE]
 
 	if cls == Submission:
-		listing = get_posts(listing, v=v)
+		listing = get_posts(listing, v=v, eager=True)
 	elif cls == Comment:
 		listing = get_comments(listing, v=v)
 	else:
@@ -55,25 +57,25 @@ def upvoters_downvoters(v, username, uid, cls, vote_cls, vote_dir, template, sta
 @app.get("/@<username>/upvoters/<uid>/posts")
 @auth_required
 def upvoters_posts(v, username, uid):
-	return upvoters_downvoters(v, username, uid, Submission, Vote, 1, "voted_posts.html", None)
+	return upvoters_downvoters(v, username, uid, Submission, Vote, 1, "userpage/voted_posts.html", None)
 
 
 @app.get("/@<username>/upvoters/<uid>/comments")
 @auth_required
 def upvoters_comments(v, username, uid):
-	return upvoters_downvoters(v, username, uid, Comment, CommentVote, 1, "voted_comments.html", True)
+	return upvoters_downvoters(v, username, uid, Comment, CommentVote, 1, "userpage/voted_comments.html", True)
 
 
 @app.get("/@<username>/downvoters/<uid>/posts")
 @auth_required
 def downvoters_posts(v, username, uid):
-	return upvoters_downvoters(v, username, uid, Submission, Vote, -1, "voted_posts.html", None)
+	return upvoters_downvoters(v, username, uid, Submission, Vote, -1, "userpage/voted_posts.html", None)
 
 
 @app.get("/@<username>/downvoters/<uid>/comments")
 @auth_required
 def downvoters_comments(v, username, uid):
-	return upvoters_downvoters(v, username, uid, Comment, CommentVote, -1, "voted_comments.html", True)
+	return upvoters_downvoters(v, username, uid, Comment, CommentVote, -1, "userpage/voted_comments.html", True)
 
 def upvoting_downvoting(v, username, uid, cls, vote_cls, vote_dir, template, standalone):
 	u = get_user(username, v=v, include_shadowbanned=False)
@@ -95,7 +97,7 @@ def upvoting_downvoting(v, username, uid, cls, vote_cls, vote_dir, template, sta
 	listing = listing[:PAGE_SIZE]
 	
 	if cls == Submission:
-		listing = get_posts(listing, v=v)
+		listing = get_posts(listing, v=v, eager=True)
 	elif cls == Comment:
 		listing = get_comments(listing, v=v)
 	else:
@@ -106,25 +108,25 @@ def upvoting_downvoting(v, username, uid, cls, vote_cls, vote_dir, template, sta
 @app.get("/@<username>/upvoting/<uid>/posts")
 @auth_required
 def upvoting_posts(v, username, uid):
-	return upvoting_downvoting(v, username, uid, Submission, Vote, 1, "voted_posts.html", None)
+	return upvoting_downvoting(v, username, uid, Submission, Vote, 1, "userpage/voted_posts.html", None)
 
 
 @app.get("/@<username>/upvoting/<uid>/comments")
 @auth_required
 def upvoting_comments(v, username, uid):
-	return upvoting_downvoting(v, username, uid, Comment, CommentVote, 1, "voted_comments.html", True)
+	return upvoting_downvoting(v, username, uid, Comment, CommentVote, 1, "userpage/voted_comments.html", True)
 
 
 @app.get("/@<username>/downvoting/<uid>/posts")
 @auth_required
 def downvoting_posts(v, username, uid):
-	return upvoting_downvoting(v, username, uid, Submission, Vote, -1, "voted_posts.html", None)
+	return upvoting_downvoting(v, username, uid, Submission, Vote, -1, "userpage/voted_posts.html", None)
 
 
 @app.get("/@<username>/downvoting/<uid>/comments")
 @auth_required
 def downvoting_comments(v, username, uid):
-	return upvoting_downvoting(v, username, uid, Comment, CommentVote, -1, "voted_comments.html", True)
+	return upvoting_downvoting(v, username, uid, Comment, CommentVote, -1, "userpage/voted_comments.html", True)
 
 def user_voted(v, username, cls, vote_cls, vote_dir, template, standalone):
 	u = get_user(username, v=v, include_shadowbanned=False)
@@ -147,7 +149,7 @@ def user_voted(v, username, cls, vote_cls, vote_dir, template, standalone):
 	next_exists = len(listing) > PAGE_SIZE
 	listing = listing[:PAGE_SIZE]
 	if cls == Submission:
-		listing = get_posts(listing, v=v)
+		listing = get_posts(listing, v=v, eager=True)
 	elif cls == Comment:
 		listing = get_comments(listing, v=v)
 	else:
@@ -158,13 +160,13 @@ def user_voted(v, username, cls, vote_cls, vote_dir, template, standalone):
 @app.get("/@<username>/upvoted/posts")
 @auth_required
 def user_upvoted_posts(v, username):
-	return user_voted(v, username, Submission, Vote, 1, "voted_posts.html", None)
+	return user_voted(v, username, Submission, Vote, 1, "userpage/voted_posts.html", None)
 
 
 @app.get("/@<username>/upvoted/comments")
 @auth_required
 def user_upvoted_comments(v, username):
-	return user_voted(v, username, Comment, CommentVote, 1, "voted_comments.html", True)
+	return user_voted(v, username, Comment, CommentVote, 1, "userpage/voted_comments.html", True)
 
 
 @app.get("/grassed")
@@ -228,7 +230,7 @@ def all_upvoters_downvoters(v, username, vote_dir, is_who_simps_hates):
 
 	name2 = f'Who @{username} {simps_haters}' if is_who_simps_hates else f'@{username} biggest {simps_haters}'
 
-	return render_template("voters.html", v=v, users=users[:PAGE_SIZE], pos=pos, name=vote_name, name2=name2, total=total)
+	return render_template("userpage/voters.html", v=v, users=users[:PAGE_SIZE], pos=pos, name=vote_name, name2=name2, total=total)
 
 @app.get("/@<username>/upvoters")
 @auth_required
@@ -251,10 +253,10 @@ def downvoting(v, username):
 	return all_upvoters_downvoters(v, username, -1, True)
 
 @app.post("/@<username>/suicide")
+@feature_required('USERS_SUICIDE')
 @limiter.limit("1/second;5/day")
 @limiter.limit("1/second;5/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @auth_required
-@feature_required('USERS_SUICIDE')
 def suicide(v, username):
 	
 
@@ -306,23 +308,23 @@ def transfer_currency(v:User, username:str, currency_name:Literal['coins', 'proc
 		else:
 			raise ValueError(f"Invalid currency '{currency_name}' got when transferring {amount} from {v.id} to {receiver.id}")
 		g.db.add(receiver)
-		send_repeatable_notification(GIFT_NOTIF_ID, log_message)
+		if GIFT_NOTIF_ID: send_repeatable_notification(GIFT_NOTIF_ID, log_message)
 		send_repeatable_notification(receiver.id, notif_text)
 	g.db.add(v)
 	return {"message": f"{amount - tax} {friendly_currency_name} have been transferred to @{receiver.username}"}
 	
 @app.post("/@<username>/transfer_coins")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @is_not_permabanned
+@ratelimit_user()
 def transfer_coins(v, username):
 	return transfer_currency(v, username, 'coins', True)
 
 @app.post("/@<username>/transfer_bux")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
-@is_not_permabanned
 @feature_required('PROCOINS')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@is_not_permabanned
+@ratelimit_user()
 def transfer_bux(v, username):
 	return transfer_currency(v, username, 'procoins', False)
 
@@ -392,9 +394,9 @@ def song(song):
 	return resp
 
 @app.post("/subscribe/<post_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def subscribe(v, post_id):
 	existing = g.db.query(Subscription).filter_by(user_id=v.id, submission_id=post_id).one_or_none()
 	if not existing:
@@ -403,9 +405,9 @@ def subscribe(v, post_id):
 	return {"message": "Subscribed to post successfully!"}
 	
 @app.post("/unsubscribe/<post_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def unsubscribe(v, post_id):
 	existing = g.db.query(Subscription).filter_by(user_id=v.id, submission_id=post_id).one_or_none()
 	if existing:
@@ -420,20 +422,20 @@ def message2(v, username):
 	user = get_user(username, v=v, include_blocks=True, include_shadowbanned=False)
 
 	if hasattr(user, 'is_blocking') and user.is_blocking:
-		abort(403, "You're blocking this user.")
+		abort(403, f"You're blocking @{user.username}")
 
 	if v.admin_level <= PERMS['MESSAGE_BLOCKED_USERS'] and hasattr(user, 'is_blocked') and user.is_blocked:
-		abort(403, "This user is blocking you.")
+		abort(403, f"@{user.username} is blocking you.")
 
 	message = sanitize_raw_body(request.values.get("message"), False)
 	if not message: abort(400, "Message is empty!")
 	if 'linkedin.com' in message: abort(403, "This domain 'linkedin.com' is banned.")
-	if v.id != AEVANN_ID and ('discord.gg' in message or 'discord.com' in message or 'discordapp.com' in message):
+	if v.id != AEVANN_ID and ('discord.gg' in message or 'discord.com/invite/' in message or 'discordapp.com/invite/' in message):
 		abort(403, "Stop grooming!")
 
 	body_html = sanitize(message)
 
-	if not (SITE.startswith('rdrama.') and user.id == BLACKJACKBTZ_ID):
+	if not (SITE == 'rdrama.net' and user.id == BLACKJACKBTZ_ID):
 		existing = g.db.query(Comment.id).filter(Comment.author_id == v.id,
 																Comment.sentto == user.id,
 																Comment.body_html == body_html,
@@ -459,7 +461,7 @@ def message2(v, username):
 			g.db.add(notif)
 
 
-	if PUSHER_ID != 'blahblahblah' and not v.shadowbanned:
+	if PUSHER_ID != DEFAULT_CONFIG_VALUE and not v.shadowbanned:
 		interests = f'{SITE}{user.id}'
 
 		title = f'New message from @{username}'
@@ -484,7 +486,7 @@ def messagereply(v):
 
 	if 'linkedin.com' in body: abort(403, "This domain 'linkedin.com' is banned")
 
-	if v.id != AEVANN_ID and ('discord.gg' in body or 'discord.com' in body or 'discordapp.com' in body):
+	if v.id != AEVANN_ID and ('discord.gg' in body or 'discord.com/invite/' in body or 'discordapp.com/invite/' in body):
 		abort(403, "Stop grooming!")
 
 	id = request.values.get("parent_id")
@@ -502,13 +504,13 @@ def messagereply(v):
 	if user_id:
 		user = get_account(user_id, v=v, include_blocks=True)
 		if hasattr(user, 'is_blocking') and user.is_blocking:
-			abort(403, "You're blocking this user.")
+			abort(403, f"You're blocking @{user.username}")
 		elif (v.admin_level <= PERMS['MESSAGE_BLOCKED_USERS']
 				and hasattr(user, 'is_blocked') and user.is_blocked):
-			abort(403, "You're blocked by this user.")
+			abort(403, f"You're blocked by @{user.username}")
 
 	if parent.sentto == 2:
-		body += process_files()
+		body += process_files(request.files, v)
 
 	body = body.strip()
 
@@ -532,7 +534,7 @@ def messagereply(v):
 			notif = Notification(comment_id=c.id, user_id=user_id)
 			g.db.add(notif)
 
-		if PUSHER_ID != 'blahblahblah' and not v.shadowbanned:
+		if PUSHER_ID != DEFAULT_CONFIG_VALUE and not v.shadowbanned:
 			interests = f'{SITE}{user_id}'
 
 			title = f'New message from @{v.username}'
@@ -544,9 +546,9 @@ def messagereply(v):
 
 			gevent.spawn(pusher_thread, interests, title, notifbody, url)
 
+	top_comment = c.top_comment(g.db)
 
-
-	if c.top_comment.sentto == 2:
+	if top_comment.sentto == 2:
 		admins = g.db.query(User.id).filter(User.admin_level >= PERMS['NOTIFICATIONS_MODMAIL'], User.id != v.id)
 		if SITE == 'watchpeopledie.tv':
 			admins = admins.filter(User.id != AEVANN_ID)
@@ -560,7 +562,7 @@ def messagereply(v):
 			notif = Notification(comment_id=c.id, user_id=admin)
 			g.db.add(notif)
 
-		ids = [c.top_comment.id] + [x.id for x in c.top_comment.replies(sort="old", v=v)]
+		ids = [top_comment.id] + [x.id for x in top_comment.replies(sort="old", v=v, db=g.db)]
 		notifications = g.db.query(Notification).filter(Notification.comment_id.in_(ids), Notification.user_id.in_(admins))
 		for n in notifications:
 			g.db.delete(n)
@@ -631,7 +633,7 @@ def followers(username, v):
 	users = g.db.query(Follow, User).join(Follow, Follow.target_id == u.id) \
 		.filter(Follow.user_id == User.id) \
 		.order_by(Follow.created_utc).all()
-	return render_template("followers.html", v=v, u=u, users=users)
+	return render_template("userpage/followers.html", v=v, u=u, users=users)
 
 @app.get("/@<username>/blockers")
 @auth_required
@@ -641,7 +643,7 @@ def blockers(username, v):
 	users = g.db.query(UserBlock, User).join(UserBlock, UserBlock.target_id == u.id) \
 		.filter(UserBlock.user_id == User.id) \
 		.order_by(UserBlock.created_utc).all()
-	return render_template("blockers.html", v=v, u=u, users=users)
+	return render_template("userpage/blockers.html", v=v, u=u, users=users)
 
 @app.get("/@<username>/following")
 @auth_required
@@ -653,7 +655,7 @@ def following(username, v):
 	users = g.db.query(User).join(Follow, Follow.user_id == u.id) \
 		.filter(Follow.target_id == User.id) \
 		.order_by(Follow.created_utc).all()
-	return render_template("following.html", v=v, u=u, users=users)
+	return render_template("userpage/following.html", v=v, u=u, users=users)
 
 @app.get("/views")
 @auth_required
@@ -661,12 +663,21 @@ def visitors(v):
 	if not v.viewers_recorded:
 		return render_template("errors/patron.html", v=v)
 	viewers=sorted(v.viewers, key = lambda x: x.last_view_utc, reverse=True)
-	return render_template("viewers.html", v=v, viewers=viewers)
+	return render_template("userpage/viewers.html", v=v, viewers=viewers)
 
+@cache.memoize(timeout=86400)
+def userpagelisting(user:User, site=None, v=None, page:int=1, sort="new", t="all"):
+	if user.shadowbanned and not (v and v.can_see_shadowbanned): return []
+	posts = g.db.query(Submission.id).filter_by(author_id=user.id, is_pinned=False)
+	if not (v and (v.admin_level >= PERMS['POST_COMMENT_MODERATION'] or v.id == user.id)):
+		posts = posts.filter_by(is_banned=False, private=False, ghost=False, deleted_utc=0)
+	posts = apply_time_filter(t, posts, Submission)
+	posts = sort_objects(sort, posts, Submission, include_shadowbanned=v and v.can_see_shadowbanned)
+	posts = posts.offset(PAGE_SIZE * (page - 1)).limit(PAGE_SIZE+1).all()
+	return [x[0] for x in posts]
 
 @app.get("/@<username>")
 @app.get("/@<username>.json")
-@app.get("/logged_out/@<username>")
 @auth_desired_with_logingate
 def u_username(username, v=None):
 	u = get_user(username, v=v, include_blocks=True, include_shadowbanned=False)
@@ -687,14 +698,14 @@ def u_username(username, v=None):
 		
 	if not u.is_visible_to(v):
 		if g.is_api_or_xhr or request.path.endswith(".json"):
-			abort(403, "This userpage is private")
-		return render_template("userpage_private.html", u=u, v=v, is_following=is_following), 403
+			abort(403, f"@{u.username}'s userpage is private")
+		return render_template("userpage/private.html", u=u, v=v, is_following=is_following), 403
 
 	
 	if v and hasattr(u, 'is_blocking') and u.is_blocking:
 		if g.is_api_or_xhr or request.path.endswith(".json"):
 			abort(403, f"You are blocking @{u.username}.")
-		return render_template("userpage_blocking.html", u=u, v=v), 403
+		return render_template("userpage/blocking.html", u=u, v=v), 403
 
 
 	sort = request.values.get("sort", "new")
@@ -702,7 +713,7 @@ def u_username(username, v=None):
 	try: page = max(int(request.values.get("page", 1)), 1)
 	except: page = 1
 
-	ids = u.userpagelisting(site=SITE, v=v, page=page, sort=sort, t=t)
+	ids = userpagelisting(u, site=SITE, v=v, page=page, sort=sort, t=t)
 
 	next_exists = (len(ids) > PAGE_SIZE)
 	ids = ids[:PAGE_SIZE]
@@ -714,11 +725,11 @@ def u_username(username, v=None):
 			for p in sticky:
 				ids = [p.id] + ids
 
-	listing = get_posts(ids, v=v)
+	listing = get_posts(ids, v=v, eager=True)
 
 	if u.unban_utc:
 		if (v and v.client) or request.path.endswith(".json"):
-			return {"data": [x.json for x in listing]}
+			return {"data": [x.json(g.db) for x in listing]}
 		
 		return render_template("userpage.html",
 												unban=u.unban_string,
@@ -732,7 +743,7 @@ def u_username(username, v=None):
 												is_following=is_following)
 
 	if (v and v.client) or request.path.endswith(".json"):
-		return {"data": [x.json for x in listing]}
+		return {"data": [x.json(g.db) for x in listing]}
 	
 	return render_template("userpage.html",
 									u=u,
@@ -747,7 +758,6 @@ def u_username(username, v=None):
 
 @app.get("/@<username>/comments")
 @app.get("/@<username>/comments.json")
-@app.get("/logged_out/@<username>/comments")
 @auth_desired_with_logingate
 def u_username_comments(username, v=None):
 	u = get_user(username, v=v, include_blocks=True, include_shadowbanned=False)
@@ -757,13 +767,13 @@ def u_username_comments(username, v=None):
 
 	if not u.is_visible_to(v):
 		if g.is_api_or_xhr or request.path.endswith(".json"):
-			abort(403, "This userpage is private")
-		return render_template("userpage_private.html", u=u, v=v, is_following=is_following), 403
+			abort(403, f"@{u.username}'s userpage is private")
+		return render_template("userpage/private.html", u=u, v=v, is_following=is_following), 403
 
 	if v and hasattr(u, 'is_blocking') and u.is_blocking:
 		if g.is_api_or_xhr or request.path.endswith(".json"):
 			abort(403, f"You are blocking @{u.username}.")
-		return render_template("userpage_blocking.html", u=u, v=v), 403
+		return render_template("userpage/blocking.html", u=u, v=v), 403
 
 	try: page = max(int(request.values.get("page", "1")), 1)
 	except: page = 1
@@ -801,9 +811,9 @@ def u_username_comments(username, v=None):
 	listing = get_comments(ids, v=v)
 
 	if (v and v.client) or request.path.endswith(".json"):
-		return {"data": [c.json for c in listing]}
+		return {"data": [c.json(g.db) for c in listing]}
 	
-	return render_template("userpage_comments.html", u=u, v=v, listing=listing, page=page, sort=sort, t=t,next_exists=next_exists, is_following=is_following, standalone=True)
+	return render_template("userpage/comments.html", u=u, v=v, listing=listing, page=page, sort=sort, t=t,next_exists=next_exists, is_following=is_following, standalone=True)
 
 
 @app.get("/@<username>/info")
@@ -813,9 +823,9 @@ def u_username_info(username, v=None):
 	user=get_user(username, v=v, include_blocks=True, include_shadowbanned=False)
 
 	if hasattr(user, 'is_blocking') and user.is_blocking:
-		abort(401, "You're blocking this user.")
+		abort(401, f"You're blocking @{user.username}")
 	elif hasattr(user, 'is_blocked') and user.is_blocked:
-		abort(403, "This user is blocking you.")
+		abort(403, f"@{user.username} is blocking you.")
 
 	return user.json
 
@@ -826,25 +836,22 @@ def u_user_id_info(id, v=None):
 	user=get_account(id, v=v, include_blocks=True, include_shadowbanned=False)
 
 	if hasattr(user, 'is_blocking') and user.is_blocking:
-		abort(403, "You're blocking this user.")
+		abort(403, f"You're blocking @{user.username}")
 	elif hasattr(user, 'is_blocked') and user.is_blocked:
-		abort(403, "This user is blocking you.")
+		abort(403, f"@{user.username} is blocking you.")
 
 	return user.json
 
 @app.post("/follow/<username>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def follow_user(username, v):
 
 	target = get_user(username, v=v, include_shadowbanned=False)
 
 	if target.id==v.id:
 		abort(400, "You can't follow yourself!")
-
-	if target.is_nofollow:
-		abort(403, "This user has disallowed other users from following them!")
 
 	if g.db.query(Follow).filter_by(user_id=v.id, target_id=target.id).one_or_none():
 		return {"message": f"@{target.username} has been followed!"}
@@ -863,9 +870,9 @@ def follow_user(username, v):
 	return {"message": f"@{target.username} has been followed!"}
 
 @app.post("/unfollow/<username>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def unfollow_user(username, v):
 
 	target = get_user(username)
@@ -873,7 +880,7 @@ def unfollow_user(username, v):
 	if target.fish:
 		if not v.shadowbanned:
 			send_notification(target.id, f"@{v.username} has tried to unfollow you and failed because of your fish award!")
-		abort(400, "You can't unfollow this user!")
+		abort(400, f"You can't unfollow @{target.username}")
 
 	follow = g.db.query(Follow).filter_by(user_id=v.id, target_id=target.id).one_or_none()
 
@@ -891,9 +898,9 @@ def unfollow_user(username, v):
 	return {"message": f"@{target.username} has been unfollowed!"}
 
 @app.post("/remove_follow/<username>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def remove_follow(username, v):
 	target = get_user(username)
 
@@ -915,18 +922,10 @@ def remove_follow(username, v):
 @app.get("/pp/<id>")
 @app.get("/uid/<id>/pic")
 @app.get("/uid/<id>/pic/profile")
-@app.get("/logged_out/pp/<id>")
-@app.get("/logged_out/uid/<id>/pic")
-@app.get("/logged_out/uid/<id>/pic/profile")
 @cache.memoize(timeout=86400)
 @limiter.exempt
 def user_profile_uid(id):
-	try: id = int(id)
-	except:
-		try: id = int(id, 36)
-		except: abort(404)
-
-	x=get_account(id)
+	x = get_account(id)
 	return redirect(x.profile_url)
 
 @app.get("/@<username>/pic")
@@ -952,12 +951,12 @@ def get_saves_and_subscribes(v, template, relationship_cls, page:int, standalone
 	next_exists = len(ids) > PAGE_SIZE
 	ids = ids[:PAGE_SIZE]
 	if cls is Submission:
-		listing = get_posts(ids, v=v)
+		listing = get_posts(ids, v=v, eager=True)
 	elif cls is Comment:
 		listing = get_comments(ids, v=v)
 	else:
 		raise TypeError("Only supports Submissions and Comments. This is probably the result of a bug with *this* function")
-	if v.client: return {"data": [x.json for x in listing]}
+	if v.client: return {"data": [x.json(g.db) for x in listing]}
 	return render_template(template, u=v, v=v, listing=listing, page=page, next_exists=next_exists, standalone=standalone)
 
 @app.get("/@<username>/saved/posts")
@@ -974,7 +973,7 @@ def saved_comments(v, username):
 	try: page = max(1, int(request.values.get("page", 1)))
 	except: abort(400, "Invalid page input!")
 
-	return get_saves_and_subscribes(v, "userpage_comments.html", CommentSaveRelationship, page, True)
+	return get_saves_and_subscribes(v, "userpage/comments.html", CommentSaveRelationship, page, True)
 
 @app.get("/@<username>/subscribed/posts")
 @auth_required
@@ -1090,35 +1089,30 @@ kofi_tiers={
 	}
 
 @app.post("/settings/kofi")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
 def settings_kofi(v):
 	if not (v.email and v.is_activated):
 		abort(400, f"You must have a verified email to verify {patron} status and claim your rewards!")
-
 	transaction = g.db.query(Transaction).filter_by(email=v.email).order_by(Transaction.created_utc.desc()).first()
-
 	if not transaction:
 		abort(404, "Email not found")
-
 	if transaction.claimed:
 		abort(400, f"{patron} rewards already claimed")
 
 	tier = kofi_tiers[transaction.amount]
 
-	v.patron = tier
-
 	procoins = procoins_li[tier]
-
 	v.procoins += procoins
 	send_repeatable_notification(v.id, f"You have received {procoins} Marseybux! You can use them to buy awards in the [shop](/shop).")
-
 	g.db.add(v)
 
-	badge_grant(badge_id=20+tier, user=v)
+	if tier > v.patron:
+		v.patron = tier
+		for badge in g.db.query(Badge).filter(Badge.user_id == v.id, Badge.badge_id > 20, Badge.badge_id < 28).all():
+			g.db.delete(badge)
+		badge_grant(badge_id=20+tier, user=v)
 
 	transaction.claimed = True
-
 	g.db.add(transaction)
-
 	return {"message": f"{patron} rewards claimed!"}

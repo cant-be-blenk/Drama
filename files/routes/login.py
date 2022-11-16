@@ -1,77 +1,30 @@
-from urllib.parse import urlencode
-from files.mail import *
-from files.__main__ import app, get_CF, limiter
-from files.helpers.const import *
-from files.helpers.regex import *
-from files.helpers.actions import *
-from files.helpers.get import *
-import requests
 import secrets
+from urllib.parse import urlencode
+
+import requests
+
+from files.__main__ import app, cache, get_CF, limiter
+from files.classes.follows import Follow
+from files.helpers.actions import *
+from files.helpers.const import *
+from files.helpers.settings import get_setting
+from files.helpers.get import *
+from files.helpers.mail import send_mail, send_verification_email
+from files.helpers.regex import *
+from files.helpers.security import *
+from files.helpers.useractions import badge_grant
+from files.routes.routehelpers import check_for_alts
+from files.routes.wrappers import *
 
 @app.get("/login")
 @auth_desired
 def login_get(v):
-
-	redir = request.values.get("redirect", "/")
+	redir = request.values.get("redirect", "/").strip().rstrip('?')
 	if redir:
-		redir = redir.replace("/logged_out", "").strip().rstrip('?')
 		if not is_site_url(redir): redir = "/"
 		if v: return redirect(redir)
 
 	return render_template("login.html", failed=False, redirect=redir)
-
-
-def check_for_alts(current:User, include_current_session=True):
-	current_id = current.id
-	if current_id in (1691,6790,7069,36152) and include_current_session:
-		session["history"] = []
-		return
-	ids = [x[0] for x in g.db.query(User.id).all()]
-	past_accs = set(session.get("history", [])) if include_current_session else set()
-
-	def add_alt(user1:int, user2:int):
-		li = [user1, user2]
-		existing = g.db.query(Alt).filter(Alt.user1.in_(li), Alt.user2.in_(li)).one_or_none()
-		if not existing:
-			new_alt = Alt(user1=user1, user2=user2)
-			g.db.add(new_alt)
-			g.db.flush()
-
-	for past_id in list(past_accs):
-		if past_id not in ids:
-			past_accs.remove(past_id)
-			continue
-
-		if past_id == MOM_ID or current_id == MOM_ID: break
-		if past_id == current_id: continue
-
-		li = [past_id, current_id]
-		add_alt(past_id, current_id)
-		other_alts = g.db.query(Alt).filter(Alt.user1.in_(li), Alt.user2.in_(li)).all()
-		for a in other_alts:
-			if a.user1 != past_id:
-				add_alt(a.user1, past_id)
-			if a.user1 != current_id:
-				add_alt(a.user1, current_id)
-			if a.user2 != past_id:
-				add_alt(a.user2, past_id)
-			if a.user2 != current_id:
-				add_alt(a.user2, current_id)
-	
-	past_accs.add(current_id)
-	if include_current_session:
-		session["history"] = list(past_accs)
-	g.db.flush()
-	for u in current.alts_unique:
-		if u.shadowbanned:
-			current.shadowbanned = u.shadowbanned
-			if not current.is_banned: current.ban_reason = u.ban_reason
-			g.db.add(current)
-		elif current.shadowbanned:
-			u.shadowbanned = current.shadowbanned
-			if not u.is_banned: u.ban_reason = current.ban_reason
-			g.db.add(u)
-
 
 def login_deduct_when(resp):
 	if not g:
@@ -81,8 +34,7 @@ def login_deduct_when(resp):
 	return g.login_failed
 
 @app.post("/login")
-@limiter.limit("6/minute;10/day",
-	deduct_when=login_deduct_when)
+@limiter.limit("6/minute;10/day", deduct_when=login_deduct_when)
 def login_post():
 	template = ''
 	g.login_failed = True
@@ -149,9 +101,8 @@ def login_post():
 	g.login_failed = False
 	on_login(account)
 
-	redir = request.values.get("redirect")
+	redir = request.values.get("redirect", "").strip().rstrip('?')
 	if redir:
-		redir = redir.replace("/logged_out", "").strip().rstrip('?')
 		if is_site_url(redir): return redirect(redir)
 	return redirect('/')
 
@@ -182,24 +133,20 @@ def me(v):
 
 
 @app.post("/logout")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def logout(v):
-
 	loggedin = cache.get(f'{SITE}_loggedin') or {}
 	if session.get("lo_user") in loggedin: del loggedin[session["lo_user"]]
 	cache.set(f'{SITE}_loggedin', loggedin)
-
 	session.pop("lo_user", None)
-
 	return {"message": "Logout successful!"}
-
 
 @app.get("/signup")
 @auth_desired
 def sign_up_get(v):
-	if not app.config['SETTINGS']['Signups']:
+	if not get_setting('Signups'):
 		return {"error": "New account registration is currently closed. Please come back later."}, 403
 
 	if v: return redirect(SITE_FULL)
@@ -217,7 +164,7 @@ def sign_up_get(v):
 		return render_template("sign_up_failed_ref.html")
 
 	now = int(time.time())
-	token = token_hex(16)
+	token = secrets.token_hex(16)
 	session["signup_token"] = token
 
 	formkey_hashstr = str(now) + token + g.agent
@@ -229,16 +176,15 @@ def sign_up_get(v):
 
 	error = request.values.get("error")
 
-	redir = request.values.get("redirect", "/")
+	redir = request.values.get("redirect", "/").strip().rstrip('?')
 	if redir:
-		redir = redir.replace("/logged_out", "").strip().rstrip('?')
 		if not is_site_url(redir): redir = "/"
 
 	return render_template("sign_up.html",
 						formkey=formkey,
 						now=now,
 						ref_user=ref_user,
-						hcaptcha=HCAPTCHA_SITEKEY,
+						turnstile=TURNSTILE_SITEKEY,
 						error=error,
 						redirect=redir
 						)
@@ -248,7 +194,7 @@ def sign_up_get(v):
 @limiter.limit("1/second;10/day")
 @auth_desired
 def sign_up_post(v):
-	if not app.config['SETTINGS']['Signups']:
+	if not get_setting('Signups'):
 		return {"error": "New account registration is currently closed. Please come back later."}, 403
 
 	if v: abort(403)
@@ -260,18 +206,14 @@ def sign_up_post(v):
 	if not submitted_token: abort(400)
 
 	correct_formkey_hashstr = form_timestamp + submitted_token + g.agent
-
 	correct_formkey = hmac.new(key=bytes(SECRET_KEY, "utf-16"),
 								msg=bytes(correct_formkey_hashstr, "utf-16"),
 								digestmod='md5'
 							).hexdigest()
 
 	now = int(time.time())
-
 	username = request.values.get("username")
-	
 	if not username: abort(400)
-
 	username = username.strip()
 
 	def signup_error(error):
@@ -287,7 +229,7 @@ def sign_up_post(v):
 		return signup_error("There was a problem. Please try again.")
 
 	if not hmac.compare_digest(correct_formkey, form_formkey):
-		return signup_error("There was a problem. Please try again!")
+		return signup_error("There was a problem. Please try again.")
 
 	if not request.values.get(
 			"password") == request.values.get("password_confirm"):
@@ -310,15 +252,15 @@ def sign_up_post(v):
 	if existing_account:
 		return signup_error("An account with that username already exists.")
 
-	if HCAPTCHA_SITEKEY != 'blahblahblah':
-		token = request.values.get("h-captcha-response")
+	if TURNSTILE_SITEKEY != DEFAULT_CONFIG_VALUE:
+		token = request.values.get("cf-turnstile-response")
 		if not token:
 			return signup_error("Unable to verify captcha [1].")
 
-		data = {"secret": HCAPTCHA_SECRET,
+		data = {"secret": TURNSTILE_SECRET,
 				"response": token,
-				"sitekey": HCAPTCHA_SITEKEY}
-		url = "https://hcaptcha.com/siteverify"
+				"sitekey": TURNSTILE_SITEKEY}
+		url = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 		x = requests.post(url, data=data, timeout=5)
 
@@ -372,11 +314,10 @@ def sign_up_post(v):
 		send_verification_email(new_user)
 
 
-	check_for_alts(new_user)
-	
-	send_notification(new_user.id, WELCOME_MSG)
-
 	session["lo_user"] = new_user.id
+
+	check_for_alts(new_user)
+	send_notification(new_user.id, WELCOME_MSG)
 	
 	if SIGNUP_FOLLOW_ID:
 		signup_autofollow = get_account(SIGNUP_FOLLOW_ID)
@@ -387,10 +328,11 @@ def sign_up_post(v):
 		send_notification(signup_autofollow.id, f"A new user - @{new_user.username} - has followed you automatically!")
 	elif CARP_ID:
 		send_notification(CARP_ID, f"A new user - @{new_user.username} - has signed up!")
+		if JUSTCOOL_ID:
+			send_notification(JUSTCOOL_ID, f"A new user - @{new_user.username} - has signed up!")
 
-	redir = request.values.get("redirect")
+	redir = request.values.get("redirect", "").strip().rstrip('?')
 	if redir:
-		redir = redir.replace("/logged_out", "").strip().rstrip('?')
 		if is_site_url(redir): return redirect(redir)
 	return redirect('/')
 
@@ -401,7 +343,7 @@ def get_forgot():
 
 
 @app.post("/forgot")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 def post_forgot():
 
 	username = request.values.get("username")
@@ -445,23 +387,15 @@ def get_reset():
 	except:
 		pass
 	token = request.values.get("token")
-
 	now = int(time.time())
 
 	if now - timestamp > 600:
-		return render_template("message.html", 
-			title="Password reset link expired",
-			error="This password reset link has expired.")
+		abort(410, "This password reset link has expired.")
 
 	user = get_account(user_id)
-	
-	if not user: abort(400)
 
 	if not validate_hash(f"{user_id}+{timestamp}+forgot+{user.login_nonce}", token):
 		abort(400)
-
-	if not user:
-		abort(404)
 
 	reset_token = generate_hash(f"{user.id}+{timestamp}+reset+{user.login_nonce}")
 
@@ -473,11 +407,10 @@ def get_reset():
 
 
 @app.post("/reset")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_desired
 def post_reset(v):
 	if v: return redirect('/')
-
 	user_id = request.values.get("user_id")
 	timestamp = 0
 	try:
@@ -485,23 +418,17 @@ def post_reset(v):
 	except:
 		abort(400)
 	token = request.values.get("token")
-
 	password = request.values.get("password")
 	confirm_password = request.values.get("confirm_password")
 
 	now = int(time.time())
 
 	if now - timestamp > 600:
-		return render_template("message.html",
-							title="Password reset expired",
-							error="This password reset form has expired.")
+		abort(410, "This password reset link has expired.")
 
 	user = get_account(user_id)
-
 	if not validate_hash(f"{user_id}+{timestamp}+reset+{user.login_nonce}", token):
 		abort(400)
-	if not user:
-		abort(404)
 
 	if password != confirm_password:
 		return render_template("reset_password.html",
@@ -521,7 +448,7 @@ def post_reset(v):
 @app.get("/lost_2fa")
 @auth_desired
 def lost_2fa(v):
-
+	if v and not v.mfa_secret: abort(400, "You don't have 2FA enabled")
 	return render_template(
 		"lost_2fa.html",
 		v=v
@@ -530,7 +457,6 @@ def lost_2fa(v):
 @app.post("/request_2fa_disable")
 @limiter.limit("1/second;6/minute;200/hour;1000/day")
 def request_2fa_disable():
-
 	username=request.values.get("username")
 	user=get_user(username, graceful=True)
 	if not user or not user.email or not user.mfa_secret:
@@ -542,7 +468,7 @@ def request_2fa_disable():
 	email=request.values.get("email").strip().lower()
 
 	if not email_regex.fullmatch(email):
-		return render_template("message.html", title="Invalid email.", error="Invalid email.")
+		abort(400, "Invalid email")
 
 	password =request.values.get("password")
 	if not user.verifyPass(password):
@@ -577,9 +503,7 @@ def reset_2fa():
 		abort(400)
 
 	if now > t+3600*24:
-		return render_template("message.html",
-						title="Expired Link",
-						error="This link has expired.")
+		abort(410, "This 2FA reset link has expired.")
 
 	token=request.values.get("token")
 	uid=request.values.get("id")

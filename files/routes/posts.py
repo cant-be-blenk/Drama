@@ -1,36 +1,40 @@
+import os
 import time
-import gevent
-import requests
-from files.helpers.wrappers import *
-from files.helpers.sanitize import *
-from files.helpers.alerts import *
-from files.helpers.discord import *
-from files.helpers.const import *
-from files.helpers.regex import *
-from files.helpers.slots import *
-from files.helpers.get import *
-from files.helpers.actions import *
-from files.helpers.sorting_and_time import *
-from files.classes import *
-from flask import *
 from io import BytesIO
-from files.__main__ import app, limiter, cache, db_session
-from PIL import Image
-from .front import frontlist
-from urllib.parse import ParseResult, urlunparse, urlparse, quote, unquote
 from os import path
-import requests
 from shutil import copyfile
 from sys import stdout
-import os
+from urllib.parse import ParseResult, quote, unquote, urlparse, urlunparse
 
+import gevent
+import requests
+from PIL import Image
+
+from files.__main__ import app, cache, limiter
+from files.classes import *
+from files.helpers.actions import *
+from files.helpers.alerts import *
+from files.helpers.const import *
+from files.helpers.discord import *
+from files.helpers.get import *
+from files.helpers.regex import *
+from files.helpers.sanitize import *
+from files.helpers.settings import get_setting
+from files.helpers.slots import *
+from files.helpers.sorting_and_time import *
+from files.routes.routehelpers import execute_shadowban_viewers_and_voters
+from files.routes.wrappers import *
+
+from .front import frontlist
+from .users import userpagelisting
+
+from files.__main__ import app, limiter
 
 titleheaders = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.72 Safari/537.36"}
 
-
 @app.post("/club_post/<pid>")
-@auth_required
 @feature_required('COUNTRY_CLUB')
+@auth_required
 def club_post(pid, v):
 	post = get_post(pid)
 	if post.author_id != v.id and v.admin_level < PERMS['POST_COMMENT_MODERATION']: abort(403)
@@ -47,14 +51,14 @@ def club_post(pid, v):
 			)
 			g.db.add(ma)
 
-			message = f"@{v.username} (Admin) has moved [{post.title}]({post.shortlink}) to the {CC_TITLE}!"
+			message = f"@{v.username} (Admin) has marked [{post.title}]({post.shortlink}) as {CC_TITLE}!"
 			send_repeatable_notification(post.author_id, message)
 
-	return {"message": f"Post has been moved to the {CC_TITLE}!"}
+	return {"message": f"Post has been marked as {CC_TITLE}!"}
 
 @app.post("/unclub_post/<pid>")
-@auth_required
 @feature_required('COUNTRY_CLUB')
+@auth_required
 def unclub_post(pid, v):
 	post = get_post(pid)
 	if post.author_id != v.id and v.admin_level < PERMS['POST_COMMENT_MODERATION']: abort(403)
@@ -71,16 +75,16 @@ def unclub_post(pid, v):
 			)
 			g.db.add(ma)
 
-			message = f"@{v.username} (Admin) has removed [{post.title}]({post.shortlink}) from the {CC_TITLE}!"
+			message = f"@{v.username} (Admin) has unmarked [{post.title}]({post.shortlink}) as {CC_TITLE}!"
 			send_repeatable_notification(post.author_id, message)
 
-	return {"message": f"Post has been removed from the {CC_TITLE}!"}
+	return {"message": f"Post has been unmarked as {CC_TITLE}!"}
 
 
 @app.post("/publish/<pid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def publish(pid, v):
 	post = get_post(pid)
 	if not post.private: return {"message": "Post published!"}
@@ -100,7 +104,7 @@ def publish(pid, v):
 
 
 	cache.delete_memoized(frontlist)
-	cache.delete_memoized(User.userpagelisting)
+	cache.delete_memoized(userpagelisting)
 
 	if post.sub == 'changelog':
 		send_changelog_message(post.permalink)
@@ -130,10 +134,6 @@ def submit_get(v, sub=None):
 @app.get("/post/<pid>/<anything>")
 @app.get("/h/<sub>/post/<pid>")
 @app.get("/h/<sub>/post/<pid>/<anything>")
-@app.get("/logged_out/post/<pid>")
-@app.get("/logged_out/post/<pid>/<anything>")
-@app.get("/logged_out/h/<sub>/post/<pid>")
-@app.get("/logged_out/h/<sub>/post/<pid>/<anything>")
 @auth_desired_with_logingate
 def post_id(pid, anything=None, v=None, sub=None):
 	post = get_post(pid, v=v)
@@ -151,6 +151,7 @@ def post_id(pid, anything=None, v=None, sub=None):
 	if post.club and not (v and (v.paid_dues or v.id == post.author_id)): abort(403)
 
 	if v:
+		execute_shadowban_viewers_and_voters(v, post)
 		# shadowban check is done in sort_objects
 		# output is needed: see comments.py
 		comments, output = get_comments_v_properties(v, True, None, Comment.parent_submission == post.id, Comment.level < 10)
@@ -181,7 +182,7 @@ def post_id(pid, anything=None, v=None, sub=None):
 	if post.comment_count > threshold+25 and not (v and v.client) and not request.values.get("all"):
 		comments2 = []
 		count = 0
-		if post.created_utc > 1638672040:
+		if post.created_utc > 1638672040: # TODO: migrate old comments to use top_comment_id
 			for comment in comments:
 				comments2.append(comment)
 				ids.add(comment.id)
@@ -198,26 +199,27 @@ def post_id(pid, anything=None, v=None, sub=None):
 		else: offset = 1
 		comments = comments2
 
+	pinned2 = set()
 	for pin in pinned:
 		if pin.stickied_utc and int(time.time()) > pin.stickied_utc:
 			pin.stickied = None
 			pin.stickied_utc = None
 			g.db.add(pin)
-			pinned.remove(pin)
 		elif pin.level > 1:
-			pinned.remove(pin)
-			if pin.top_comment not in pinned:
-				pinned.append(pin.top_comment)
+			pinned2.add(pin.top_comment(g.db))
 			if pin.top_comment in comments:
-				comments.remove(pin.top_comment) 
+				comments.remove(pin.top_comment(g.db))
+		else:
+			pinned2.add(pin)
 
+	pinned = list(pinned2)
 	post.replies = pinned + comments
 
 	post.views += 1
 	g.db.add(post)
 
 	if v and v.client:
-		return post.json
+		return post.json(g.db)
 
 	template = "submission.html"
 	if (post.is_banned or post.author.shadowbanned) \
@@ -226,10 +228,10 @@ def post_id(pid, anything=None, v=None, sub=None):
 
 	return render_template(template, v=v, p=post, ids=list(ids),
 		sort=sort, render_replies=True, offset=offset, sub=post.subr,
-		fart=app.config['SETTINGS']['Fart mode'])
+		fart=get_setting('Fart mode'))
 
 @app.get("/viewmore/<pid>/<sort>/<offset>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_desired_with_logingate
 def viewmore(v, pid, sort, offset):
 	post = get_post(pid, v=v)
@@ -264,7 +266,7 @@ def viewmore(v, pid, sort, offset):
 
 	comments2 = []
 	count = 0
-	if post.created_utc > 1638672040:
+	if post.created_utc > 1638672040: # TODO: migrate old comments to use top_comment_id
 		for comment in comments:
 			comments2.append(comment)
 			ids.add(comment.id)
@@ -285,7 +287,7 @@ def viewmore(v, pid, sort, offset):
 
 
 @app.get("/morecomments/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_desired_with_logingate
 def morecomments(v, cid):
 	try: cid = int(cid)
@@ -300,7 +302,7 @@ def morecomments(v, cid):
 		comments = output
 	else:
 		c = get_comment(cid)
-		comments = c.replies(sort=request.values.get('sort'), v=v)
+		comments = c.replies(sort=request.values.get('sort'), v=v, db=g.db)
 
 	if comments: p = comments[0].post
 	else: p = None
@@ -310,7 +312,7 @@ def morecomments(v, cid):
 @app.post("/edit_post/<pid>")
 @limiter.limit("1/second;10/minute;100/hour;200/day")
 @limiter.limit("1/second;10/minute;100/hour;200/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
-@auth_required
+@is_not_permabanned
 def edit_post(pid, v):
 	p = get_post(pid)
 	if v.id != p.author_id and v.admin_level < PERMS['POST_EDITING']:
@@ -343,28 +345,43 @@ def edit_post(pid, v):
 		p.title = title
 		p.title_html = title_html
 
-	body += process_files()
+	body += process_files(request.files, v)
 	body = body.strip()[:POST_BODY_LENGTH_LIMIT] # process_files() may be adding stuff to the body
 
 	if body != p.body:
+		if v and v.admin_level >= PERMS['POST_BETS']:
+			for i in bet_regex.finditer(body):
+				body = body.replace(i.group(0), "")
+				body_html = filter_emojis_only(i.group(1))
+				if len(body_html) > 500: abort(400, "Bet option too long!")
+				bet = SubmissionOption(
+					submission_id=p.id,
+					body_html=body_html,
+					exclusive = 2
+				)
+				g.db.add(bet)
+
 		for i in poll_regex.finditer(body):
 			body = body.replace(i.group(0), "")
+			body_html = filter_emojis_only(i.group(1))
+			if len(body_html) > 500: abort(400, "Poll option too long!")
 			option = SubmissionOption(
 				submission_id=p.id,
-				body_html=filter_emojis_only(i.group(1)),
+				body_html=body_html,
 				exclusive = 0
 			)
 			g.db.add(option)
 
 		for i in choice_regex.finditer(body):
 			body = body.replace(i.group(0), "")
-			option = SubmissionOption(
+			body_html = filter_emojis_only(i.group(1))
+			if len(body_html) > 500: abort(400, "Poll option too long!")
+			choice = SubmissionOption(
 				submission_id=p.id,
-				body_html=filter_emojis_only(i.group(1)),
+				body_html=body_html,
 				exclusive = 1
 			)
-			g.db.add(option)
-
+			g.db.add(choice)
 
 		torture = (v.agendaposter and not v.marseyawarded and p.sub != 'chudrama' and v.id == p.author_id)
 
@@ -410,12 +427,9 @@ def edit_post(pid, v):
 	return redirect(p.permalink)
 
 
-def thumbnail_thread(pid):
-
+def thumbnail_thread(pid:int, vid:int):
 	db = db_session()
-
 	def expand_url(post_url, fragment_url):
-
 		if fragment_url.startswith("https://"):
 			return fragment_url
 		elif fragment_url.startswith("https://"):
@@ -452,8 +466,6 @@ def thumbnail_thread(pid):
 	if x.status_code != 200:
 		db.close()
 		return
-	
-
 
 	if x.headers.get("Content-Type","").startswith("text/html"):
 		soup=BeautifulSoup(x.content, 'lxml')
@@ -493,7 +505,6 @@ def thumbnail_thread(pid):
 
 
 		for url in thumb_candidate_urls:
-
 			try:
 				image_req=requests.get(url, headers=headers, timeout=5, proxies=proxies)
 			except:
@@ -511,14 +522,10 @@ def thumbnail_thread(pid):
 			with Image.open(BytesIO(image_req.content)) as i:
 				if i.width < 30 or i.height < 30:
 					continue
-
 			break
-
 		else:
 			db.close()
 			return
-
-
 
 	elif x.headers.get("Content-Type","").startswith("image/"):
 		image_req=x
@@ -538,9 +545,12 @@ def thumbnail_thread(pid):
 		for chunk in image_req.iter_content(1024):
 			file.write(chunk)
 
-	post.thumburl = process_image(name, resize=100, uploader=post.author_id, db=db)
-	db.add(post)
-	db.commit()
+	v = db.get(User, vid)
+	url = process_image(name, v, resize=100, uploader_id=post.author_id, db=db)
+	if url:
+		post.thumburl = url
+		db.add(post)
+		db.commit()
 	db.close()
 	stdout.flush()
 	return
@@ -756,7 +766,7 @@ def submit_post(v, sub=None):
 		choices.append(i.group(1))
 		body = body.replace(i.group(0), "")
 
-	body += process_files()
+	body += process_files(request.files, v)
 	body = body.strip()[:POST_BODY_LENGTH_LIMIT] # process_files() adds content to the body, so we need to re-strip
 
 	torture = (v.agendaposter and not v.marseyawarded and sub != 'chudrama')
@@ -768,28 +778,29 @@ def submit_post(v, sub=None):
 
 	if len(body_html) > POST_BODY_HTML_LENGTH_LIMIT: return error(f"Submission body_html too long! (max {POST_BODY_HTML_LENGTH_LIMIT} characters)")
 
-	club = False
-	if FEATURES['COUNTRY_CLUB']:
-		club = bool(request.values.get("club",""))
-	
+	flag_notify = (request.values.get("notify", "on") == "on")
+	flag_new = request.values.get("new", False, bool)
+	flag_over_18 = request.values.get("over_18", False, bool)
+	flag_private = request.values.get("private", False, bool)
+	flag_club = (request.values.get("club", False, bool) and FEATURES['COUNTRY_CLUB'])
+	flag_ghost = request.values.get("ghost", False, bool) and v.can_post_in_ghost_threads
+
 	if embed and len(embed) > 1500: embed = None
-
-	ghost = request.values.get("ghost") and v.charge_account('coins', 100)
-
 	if embed: embed = embed.strip()
 
 	if url and url.startswith(SITE_FULL):
 		url = url.split(SITE_FULL)[1]
 
-	if v.agendaposter == 1: sub = 'chudrama'
+	if SITE == 'rdrama.net' and v.agendaposter == 1:
+		sub = 'chudrama'
 
 	post = Submission(
-		private=bool(request.values.get("private","")),
-		notify=bool(request.values.get("notify","")),
-		club=club,
+		private=flag_private,
+		notify=flag_notify,
+		club=flag_club,
 		author_id=v.id,
-		over_18=bool(request.values.get("over_18","")),
-		new=bool(request.values.get("new","")),
+		over_18=flag_over_18,
+		new=flag_new,
 		app_id=v.client.application.id if v.client else None,
 		is_bot=(v.client is not None),
 		url=url,
@@ -799,7 +810,7 @@ def submit_post(v, sub=None):
 		title=title,
 		title_html=title_html,
 		sub=sub,
-		ghost=ghost
+		ghost=flag_ghost
 	)
 
 	g.db.add(post)
@@ -808,30 +819,36 @@ def submit_post(v, sub=None):
 	for text in [post.body, post.title, post.url]:
 		if not execute_blackjack(v, post, text, 'submission'): break
 
+	if v and v.admin_level >= PERMS['POST_BETS']:
+		for bet in bets:
+			body_html = filter_emojis_only(bet)
+			if len(body_html) > 500: abort(400, "Bet option too long!")
+			bet = SubmissionOption(
+				submission_id=post.id,
+				body_html=body_html,
+				exclusive=2
+			)
+			g.db.add(bet)
+
 	for option in options:
+		body_html = filter_emojis_only(option)
+		if len(body_html) > 500: abort(400, "Poll option too long!")
 		option = SubmissionOption(
 			submission_id=post.id,
-			body_html=filter_emojis_only(option),
+			body_html=body_html,
 			exclusive=0
 		)
 		g.db.add(option)
 
 	for choice in choices:
+		body_html = filter_emojis_only(choice)
+		if len(body_html) > 500: abort(400, "Poll option too long!")
 		choice = SubmissionOption(
 			submission_id=post.id,
-			body_html=filter_emojis_only(choice),
+			body_html=body_html,
 			exclusive=1
 		)
 		g.db.add(choice)
-
-	if v and v.admin_level >= PERMS['POST_BETS']:
-		for bet in bets:
-			bet = SubmissionOption(
-				submission_id=post.id,
-				body_html=filter_emojis_only(bet),
-				exclusive=2
-			)
-			g.db.add(bet)
 
 	vote = Vote(user_id=v.id,
 				vote_type=1,
@@ -839,33 +856,28 @@ def submit_post(v, sub=None):
 				)
 	g.db.add(vote)
 	
-	if request.files.get('file-url') and request.headers.get("cf-ipcountry") != "T1":
-
+	if request.files.get('file-url') and not g.is_tor:
 		file = request.files['file-url']
 
 		if file.content_type.startswith('image/'):
 			name = f'/images/{time.time()}'.replace('.','') + '.webp'
 			file.save(name)
-			post.url = process_image(name, patron=v.patron)
+			post.url = process_image(name, v)
 
 			name2 = name.replace('.webp', 'r.webp')
 			copyfile(name, name2)
-			post.thumburl = process_image(name2, resize=100)
+			post.thumburl = process_image(name2, v, resize=100)
 		elif file.content_type.startswith('video/'):
-			post.url = process_video(file)
+			post.url = process_video(file, v)
 		elif file.content_type.startswith('audio/'):
-			post.url = process_audio(file)
+			post.url = process_audio(file, v)
 		else:
 			abort(415)
 		
 	if not post.thumburl and post.url:
-		gevent.spawn(thumbnail_thread, post.id)
-
-
-
+		gevent.spawn(thumbnail_thread, post.id, v.id)
 
 	if not post.private and not post.ghost:
-
 		notify_users = NOTIFY_USERS(f'{title} {body}', v)
 
 		if notify_users:
@@ -914,11 +926,10 @@ def submit_post(v, sub=None):
 	v.post_count = g.db.query(Submission).filter_by(author_id=v.id, deleted_utc=0).count()
 	g.db.add(v)
 
-	execute_pizza_autovote(v, post)
 	execute_lawlz_actions(v, post)
 
 	cache.delete_memoized(frontlist)
-	cache.delete_memoized(User.userpagelisting)
+	cache.delete_memoized(userpagelisting)
 
 	if post.sub == 'changelog' and not post.private:
 		send_changelog_message(post.permalink)
@@ -927,7 +938,7 @@ def submit_post(v, sub=None):
 		send_wpd_message(post.permalink)
 
 	g.db.commit()
-	if v.client: return post.json
+	if v.client: return post.json(g.db)
 	else:
 		post.voted = 1
 		if post.new or 'megathread' in post.title.lower(): sort = 'new'
@@ -936,9 +947,9 @@ def submit_post(v, sub=None):
 
 
 @app.post("/delete_post/<pid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def delete_post_pid(pid, v):
 	post = get_post(pid)
 	if post.author_id != v.id: abort(403)
@@ -954,7 +965,7 @@ def delete_post_pid(pid, v):
 		g.db.add(post)
 
 		cache.delete_memoized(frontlist)
-		cache.delete_memoized(User.userpagelisting)
+		cache.delete_memoized(userpagelisting)
 
 		g.db.flush()
 		v.post_count = g.db.query(Submission).filter_by(author_id=v.id, deleted_utc=0).count()
@@ -963,9 +974,9 @@ def delete_post_pid(pid, v):
 	return {"message": "Post deleted!"}
 
 @app.post("/undelete_post/<pid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def undelete_post_pid(pid, v):
 	post = get_post(pid)
 	if post.author_id != v.id: abort(403)
@@ -975,7 +986,7 @@ def undelete_post_pid(pid, v):
 		g.db.add(post)
 
 		cache.delete_memoized(frontlist)
-		cache.delete_memoized(User.userpagelisting)
+		cache.delete_memoized(userpagelisting)
 
 		g.db.flush()
 		v.post_count = g.db.query(Submission).filter_by(author_id=v.id, deleted_utc=0).count()
@@ -1019,9 +1030,9 @@ def toggle_post_nsfw(pid, v):
 	else: return {"message": "Post has been unmarked as +18!"}
 
 @app.post("/save_post/<pid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def save_post(pid, v):
 
 	post=get_post(pid)
@@ -1035,9 +1046,9 @@ def save_post(pid, v):
 	return {"message": "Post saved!"}
 
 @app.post("/unsave_post/<pid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def unsave_post(pid, v):
 
 	post=get_post(pid)
@@ -1057,7 +1068,7 @@ def pin_post(post_id, v):
 		if v.id != post.author_id: abort(403, "Only the post author can do that!")
 		post.is_pinned = not post.is_pinned
 		g.db.add(post)
-		cache.delete_memoized(User.userpagelisting)
+		cache.delete_memoized(userpagelisting)
 		if post.is_pinned: return {"message": "Post pinned!"}
 		else: return {"message": "Post unpinned!"}
 	return abort(404, "Post not found!")
@@ -1070,9 +1081,10 @@ extensions = IMAGE_FORMATS + VIDEO_FORMATS + AUDIO_FORMATS
 @limiter.limit("3/minute", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @auth_required
 def get_post_title(v):
-
 	url = request.values.get("url")
 	if not url or '\\' in url: abort(400)
+	url = url.strip()
+	if not url.startswith('http'): abort(400)
 
 	checking_url = url.lower().split('?')[0].split('%3F')[0]
 	if any((checking_url.endswith(f'.{x}') for x in extensions)):
@@ -1084,9 +1096,10 @@ def get_post_title(v):
 	content_type = x.headers.get("Content-Type")
 	if not content_type or "text/html" not in content_type: abort(400)
 
-	soup = BeautifulSoup(x.content, 'lxml')
+	# no you can't just parse html with reeeeeeeegex
+	match = html_title_regex.search(x.text)
+	if match and match.lastindex >= 1:
+		title = match.group(1)
+	else: abort(400)
 
-	title = soup.find('title')
-	if not title: abort(400)
-
-	return {"url": url, "title": title.string}
+	return {"url": url, "title": title}

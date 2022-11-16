@@ -1,26 +1,23 @@
 import time
-import re
-from os import remove
-from PIL import Image as IMAGE
+from urllib.parse import quote, urlencode
 
-from files.helpers.wrappers import *
+from files.__main__ import app, cache, limiter
+from files.classes import *
+from files.helpers.actions import *
 from files.helpers.alerts import *
-from files.helpers.sanitize import *
-from files.helpers.security import *
+from files.helpers.cloudflare import *
+from files.helpers.const import *
 from files.helpers.get import *
 from files.helpers.media import *
-from files.helpers.const import *
-from files.helpers.actions import *
+from files.helpers.sanitize import *
+from files.helpers.security import *
+from files.helpers.settings import toggle_setting
 from files.helpers.useractions import *
-import files.helpers.cloudflare as cloudflare
-from files.classes import *
-from flask import *
-from files.__main__ import app, cache, limiter
+from files.routes.routehelpers import check_for_alts
+from files.routes.wrappers import *
+
 from .front import frontlist
-from .login import check_for_alts
-import datetime
-import requests
-from urllib.parse import quote, urlencode
+
 
 @app.post('/kippy')
 @admin_level_required(PERMS['PRINT_MARSEYBUX_FOR_KIPPY_ON_PCMEMES'])
@@ -36,13 +33,13 @@ def kippy(v):
 def loggedin_list(v):
 	ids = [x for x,val in cache.get(f'{SITE}_loggedin').items() if time.time()-val < LOGGEDIN_ACTIVE_TIME]
 	users = g.db.query(User).filter(User.id.in_(ids)).order_by(User.admin_level.desc(), User.truescore.desc()).all()
-	return render_template("loggedin.html", v=v, users=users)
+	return render_template("admin/loggedin.html", v=v, users=users)
 
 @app.get('/admin/loggedout')
 @admin_level_required(PERMS['VIEW_ACTIVE_USERS'])
 def loggedout_list(v):
 	users = sorted([val[1] for x,val in cache.get(f'{SITE}_loggedout').items() if time.time()-val[0] < LOGGEDIN_ACTIVE_TIME])
-	return render_template("loggedout.html", v=v, users=users)
+	return render_template("admin/loggedout.html", v=v, users=users)
 
 @app.get('/admin/merge/<id1>/<id2>')
 @admin_level_required(PERMS['USER_MERGE'])
@@ -159,7 +156,7 @@ def merge_all(v, id):
 @app.post("/@<username>/make_admin")
 @admin_level_required(PERMS['ADMIN_ADD'])
 def make_admin(v, username):
-	if SITE.startswith('rdrama.'): abort(403)
+	if SITE == 'rdrama.net': abort(403)
 
 	user = get_user(username)
 
@@ -193,7 +190,7 @@ def remove_admin(v, username):
 	return {"message": f"@{user.username} has been removed as admin!"}
 
 @app.post("/distribute/<option_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_BETS_DISTRIBUTE'])
 def distribute(v, option_id):
 	autojanny = get_account(AUTOJANNY_ID)
@@ -249,7 +246,7 @@ def distribute(v, option_id):
 	return {"message": f"Each winner has received {coinsperperson} coins!"}
 
 @app.post("/@<username>/revert_actions")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['ADMIN_ACTIONS_REVERT'])
 def revert_actions(v, username):
 	user = get_user(username)
@@ -299,7 +296,7 @@ def revert_actions(v, username):
 	return {"message": f"@{user.username}'s admin actions have been reverted!"}
 
 @app.post("/@<username>/club_allow")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_CLUB_ALLOW_BAN'])
 def club_allow(v, username):
 	u = get_user(username, v=v)
@@ -325,7 +322,7 @@ def club_allow(v, username):
 	return {"message": f"@{u.username} has been allowed into the {CC_TITLE}!"}
 
 @app.post("/@<username>/club_ban")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_CLUB_ALLOW_BAN'])
 def club_ban(v, username):
 	u = get_user(username, v=v)
@@ -354,7 +351,7 @@ def club_ban(v, username):
 @admin_level_required(PERMS['USER_SHADOWBAN'])
 def shadowbanned(v):
 	users = g.db.query(User).filter(User.shadowbanned != None).order_by(User.shadowbanned).all()
-	return render_template("shadowbanned.html", v=v, users=users)
+	return render_template("admin/shadowbanned.html", v=v, users=users)
 
 
 @app.get("/admin/image_posts")
@@ -431,7 +428,7 @@ def admin_home(v):
 	under_attack = False
 
 	if v.admin_level >= PERMS['SITE_SETTINGS_UNDER_ATTACK']:
-		under_attack = (cloudflare.get_security_level() or 'high') == 'under_attack'
+		under_attack = (get_security_level() or 'high') == 'under_attack'
 
 	gitref = admin_git_head()
 	
@@ -458,27 +455,20 @@ def admin_git_head():
 @app.post("/admin/site_settings/<setting>")
 @admin_level_required(PERMS['SITE_SETTINGS'])
 def change_settings(v, setting):
-	site_settings = app.config['SETTINGS']
-	site_settings[setting] = not site_settings[setting] 
-	with open("/site_settings.json", "w", encoding='utf_8') as f:
-		json.dump(site_settings, f)
-
-	if site_settings[setting]: word = 'enable'
+	val = toggle_setting(setting)
+	if val: word = 'enable'
 	else: word = 'disable'
-
 	ma = ModAction(
 		kind=f"{word}_{setting}",
 		user_id=v.id,
 	)
 	g.db.add(ma)
-
-
 	return {'message': f"{setting} {word}d successfully!"}
 
 @app.post("/admin/clear_cloudflare_cache")
 @admin_level_required(PERMS['SITE_CACHE_PURGE_CDN'])
 def clear_cloudflare_cache(v):
-	if not cloudflare.clear_cloudflare_cache():
+	if not clear_entire_cache():
 		abort(400, 'Failed to clear cloudflare cache!')
 	ma = ModAction(
 		kind="clear_cloudflare_cache",
@@ -503,13 +493,13 @@ def admin_clear_internal_cache(v):
 @app.post("/admin/under_attack")
 @admin_level_required(PERMS['SITE_SETTINGS_UNDER_ATTACK'])
 def under_attack(v):
-	response = cloudflare.get_security_level()
+	response = get_security_level()
 	if not response:
 		abort(400, 'Could not retrieve the current security level')
 	old_under_attack_mode = response == 'under_attack'
 	enable_disable_str = 'disable' if old_under_attack_mode else 'enable'
 	new_security_level = 'high' if old_under_attack_mode else 'under_attack'
-	if not cloudflare.set_security_level(new_security_level):
+	if not set_security_level(new_security_level):
 		abort(400, f'Failed to {enable_disable_str} under attack mode')
 	ma = ModAction(
 		kind=f"{enable_disable_str}_under_attack",
@@ -520,17 +510,17 @@ def under_attack(v):
 
 @app.get("/admin/badge_grant")
 @app.get("/admin/badge_remove")
-@admin_level_required(PERMS['USER_BADGES'])
 @feature_required('BADGES')
+@admin_level_required(PERMS['USER_BADGES'])
 def badge_grant_get(v):
 	grant = request.url.endswith("grant")
 	badges = g.db.query(BadgeDef).order_by(BadgeDef.id).all()
 	return render_template("admin/badge_admin.html", v=v, badge_types=badges, grant=grant)
 
 @app.post("/admin/badge_grant")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@admin_level_required(PERMS['USER_BADGES'])
 @feature_required('BADGES')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@admin_level_required(PERMS['USER_BADGES'])
 def badge_grant_post(v):
 	badges = g.db.query(BadgeDef).order_by(BadgeDef.id).all()
 
@@ -577,9 +567,9 @@ def badge_grant_post(v):
 	return render_template("admin/badge_admin.html", v=v, badge_types=badges, grant=True, msg=f"{new_badge.name} Badge granted to @{user.username} successfully!")
 
 @app.post("/admin/badge_remove")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@admin_level_required(PERMS['USER_BADGES'])
 @feature_required('BADGES')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@admin_level_required(PERMS['USER_BADGES'])
 def badge_remove_post(v):
 	badges = g.db.query(BadgeDef).order_by(BadgeDef.id).all()
 
@@ -636,7 +626,6 @@ def users_list(v):
 @app.get("/admin/alt_votes")
 @admin_level_required(PERMS['VIEW_ALT_VOTES'])
 def alt_votes_get(v):
-
 	u1 = request.values.get("u1")
 	u2 = request.values.get("u2")
 
@@ -738,35 +727,78 @@ def alt_votes_get(v):
 						data=data
 						)
 
-
-@app.post("/admin/link_accounts")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@app.get("/admin/alts/")
+@app.get("/@<username>/alts/")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_LINK'])
-def admin_link_accounts(v):
-	u1 = get_account(request.values.get("u1")).id
-	u2 = get_account(request.values.get("u2")).id
+def admin_view_alts(v, username=None):
+	u = get_user(username or request.values.get('username'), graceful=True)
+	return render_template('admin/alts.html', v=v, u=u, alts=u.alts_unique if u else None)
 
-	new_alt = Alt(
-		user1=u1, 
-		user2=u2,
-		is_manual=True
-		)
+@app.post('/@<username>/alts/')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@admin_level_required(PERMS['USER_LINK'])
+def admin_add_alt(v, username):
+	user1 = get_user(username)
+	user2 = get_user(request.values.get('other_username'))
+	if user1.id == user2.id: abort(400, "Can't add the same account as alts of each other")
 
-	g.db.add(new_alt)
+	deleted = request.values.get('deleted', False, bool) or False
+	ids = [user1.id, user2.id]
+	a = g.db.query(Alt).filter(Alt.user1.in_(ids), Alt.user2.in_(ids)).one_or_none()
+	if a: abort(409, f"@{user1.username} and @{user2.username} are already known {'linked' if not a.deleted else 'delinked'} alts")
+	a = Alt(
+		user1=user1.id,
+		user2=user2.id,
+		is_manual=True,
+		deleted=deleted
+	)
+	g.db.add(a)
 	g.db.flush()
 
-	check_for_alts(g.db.get(User, u1), include_current_session=False)
-	check_for_alts(g.db.get(User, u2), include_current_session=False)
+	check_for_alts(user1, include_current_session=False)
+	check_for_alts(user2, include_current_session=False)
+
+	word = 'Delinked' if deleted else 'Linked'
+	ma_word = 'delink' if deleted else 'link'
+	note = f'from {user2.id}' if deleted else f'with {user2.id}'
+	ma = ModAction(
+		kind=f"{ma_word}_accounts",
+		user_id=v.id,
+		target_user_id=user1.id,
+		_note=note
+	)
+	g.db.add(ma)
+	return {"message": f"{word} @{user1.username} and @{user2.username} successfully!"}
+
+@app.route('/@<username>/alts/<int:other>/deleted', methods=["PUT", "DELETE"])
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@admin_level_required(PERMS['USER_LINK'])
+def admin_delink_relink_alt(v, username, other):
+	is_delinking = request.method == 'PUT' # we're adding the 'deleted' state if a PUT request
+	user1 = get_user(username)
+	user2 = get_account(other)
+	ids = [user1.id, user2.id]
+	a = g.db.query(Alt).filter(Alt.user1.in_(ids), Alt.user2.in_(ids)).one_or_none()
+	if not a: abort(404)
+	a.deleted = is_delinking
+	g.db.add(a)
+	g.db.flush()
+	check_for_alts(user1, include_current_session=False)
+	check_for_alts(user2, include_current_session=False)
+	word = 'Delinked' if is_delinking else 'Relinked'
+	ma_word = 'delink' if is_delinking else 'link'
+	note = f'from {user2.id}' if is_delinking else f'with {user2.id} (relinked)'
 
 	ma = ModAction(
-		kind="link_accounts",
+		kind=f"{ma_word}_accounts",
 		user_id=v.id,
-		target_user_id=u1,
-		_note=f'with {u2}'
+		target_user_id=user1.id,
+		_note=note
 	)
 	g.db.add(ma)
 
-	return redirect(f"/admin/alt_votes?u1={get_account(u1).username}&u2={get_account(u2).username}")
+	return {"message": f"{word} @{user1.username} and @{user2.username} successfully!"}
 
 
 @app.get("/admin/removed/posts")
@@ -837,7 +869,7 @@ def unagendaposter(user_id, v):
 
 
 @app.post("/shadowban/<user_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_SHADOWBAN'])
 def shadowban(user_id, v):
 	user = get_account(user_id)
@@ -868,7 +900,7 @@ def shadowban(user_id, v):
 	return {"message": f"@{user.username} has been shadowbanned!"}
 
 @app.post("/unshadowban/<user_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_SHADOWBAN'])
 def unshadowban(user_id, v):
 	user = get_account(user_id)
@@ -893,7 +925,7 @@ def unshadowban(user_id, v):
 
 
 @app.post("/admin/title_change/<user_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_TITLE_CHANGE'])
 def admin_title_change(user_id, v):
 
@@ -929,7 +961,7 @@ def admin_title_change(user_id, v):
 	return {"message": f"@{user.username}'s flair has been changed!"}
 
 @app.post("/ban_user/<user_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_BAN'])
 def ban_user(user_id, v):
 	user = get_account(user_id)
@@ -1064,7 +1096,7 @@ def agendaposter(user_id, v):
 
 
 @app.post("/unban_user/<user_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_BAN'])
 def unban_user(user_id, v):
 	user = get_account(user_id)
@@ -1096,38 +1128,46 @@ def unban_user(user_id, v):
 
 	return {"message": f"@{user.username} has been unbanned!"}
 
-@app.post("/mute_user/<int:user_id>/<int:mute_status>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@app.post("/mute_user/<int:user_id>")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['USER_BAN'])
-def mute_user(v, user_id, mute_status):
+def mute_user(v, user_id):
 	user = get_account(user_id)
 
-	if mute_status != 0 and not user.is_muted:
+	if not user.is_muted:
 		user.is_muted = True
-		log_action = 'mod_mute_user'
-		success_msg = f"@{user.username} has been muted!"
-	elif mute_status == 0 and user.is_muted:
+		ma = ModAction(
+				kind='mod_mute_user',
+				user_id=v.id,
+				target_user_id=user.id,
+				)
+		g.db.add(user)
+		g.db.add(ma)
+
+	return {"message": f"@{user.username} has been muted!"}
+
+
+@app.post("/unmute_user/<int:user_id>")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
+@admin_level_required(PERMS['USER_BAN'])
+def unmute_user(v, user_id):
+	user = get_account(user_id)
+
+	if user.is_muted:
 		user.is_muted = False
-		log_action = 'mod_unmute_user'
-		success_msg = f"@{user.username} has been un-muted!"
-	else:
-		abort(400)
+		ma = ModAction(
+				kind='mod_unmute_user',
+				user_id=v.id,
+				target_user_id=user.id,
+				)
+		g.db.add(user)
+		g.db.add(ma)
 
-	ma = ModAction(
-			kind=log_action,
-			user_id=v.id,
-			target_user_id=user.id,
-			)
+	return {"message": f"@{user.username} has been unmuted!"}
 
-	g.db.add(user)
-	g.db.add(ma)
-	if 'redir' in request.values:
-		return redirect(user.url)
-	else:
-		return {"message": success_msg}
 
 @app.post("/remove_post/<post_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def remove_post(post_id, v):
 	post = get_post(post_id)
@@ -1150,15 +1190,14 @@ def remove_post(post_id, v):
 
 	v.coins += 1
 	g.db.add(v)
-	cloudflare.purge_files_in_cache(f"https://{SITE}/logged_out")
+	purge_files_in_cache(f"https://{SITE}/")
 	return {"message": "Post removed!"}
 
 
 @app.post("/approve_post/<post_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def approve_post(post_id, v):
-
 	post = get_post(post_id)
 
 	if post.author.id == v.id and post.author.agendaposter and AGENDAPOSTER_PHRASE not in post.body.lower() and post.sub != 'chudrama':
@@ -1213,8 +1252,8 @@ def distinguish_post(post_id, v):
 
 
 @app.post("/sticky/<post_id>")
-@admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 @feature_required('PINS')
+@admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def sticky_post(post_id, v):
 	post = get_post(post_id)
 	if post.is_banned: abort(403, "Can't sticky removed posts!")
@@ -1225,7 +1264,7 @@ def sticky_post(post_id, v):
 	extra_pin_slots = 1 if post.stickied else 0
 	sticky_time = int(time.time()) + 3600 if not post.stickied else None
 
-	if pins >= PIN_LIMIT + extra_pin_slots and v.admin_level < PERMS['BYPASS_PIN_LIMIT_IF_TEMPORARY'] and not sticky_time:
+	if pins >= PIN_LIMIT + extra_pin_slots and not sticky_time:
 		abort(403, f"Can't exceed {PIN_LIMIT} pinned posts limit!")
 
 	if not post.stickied_utc:
@@ -1328,7 +1367,7 @@ def unsticky_comment(cid, v):
 
 
 @app.post("/remove_comment/<c_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def remove_comment(c_id, v):
 	comment = get_comment(c_id)
@@ -1348,7 +1387,7 @@ def remove_comment(c_id, v):
 
 
 @app.post("/approve_comment/<c_id>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def approve_comment(c_id, v):
 
@@ -1410,7 +1449,7 @@ def admin_banned_domains(v):
 	return render_template("admin/banned_domains.html", v=v, banned_domains=banned_domains)
 
 @app.post("/admin/ban_domain")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['DOMAINS_BAN'])
 def ban_domain(v):
 
@@ -1435,7 +1474,7 @@ def ban_domain(v):
 
 
 @app.post("/admin/unban_domain/<domain>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['DOMAINS_BAN'])
 def unban_domain(v, domain):
 	existing = g.db.get(BannedDomain, domain)
@@ -1454,7 +1493,7 @@ def unban_domain(v, domain):
 
 
 @app.post("/admin/nuke_user")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def admin_nuke_user(v):
 
@@ -1487,7 +1526,7 @@ def admin_nuke_user(v):
 
 
 @app.post("/admin/unnuke_user")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['POST_COMMENT_MODERATION'])
 def admin_nunuke_user(v):
 

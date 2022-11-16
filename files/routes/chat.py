@@ -1,17 +1,17 @@
+import atexit
 import time
 import uuid
-from files.helpers.jinja2 import timestamp
-from files.helpers.wrappers import *
-from files.helpers.sanitize import sanitize
-from files.helpers.const import *
-from files.helpers.alerts import *
-from files.helpers.regex import *
-from files.helpers.actions import *
+
 from flask_socketio import SocketIO, emit
-from files.__main__ import app, limiter, cache
-from flask import render_template
-import sys
-import atexit
+
+from files.helpers.actions import *
+from files.helpers.alerts import *
+from files.helpers.const import *
+from files.helpers.regex import *
+from files.helpers.sanitize import sanitize
+from files.routes.wrappers import *
+
+from files.__main__ import app, cache, limiter
 
 if SITE == 'localhost':
 	socketio = SocketIO(
@@ -39,31 +39,33 @@ user_ids_to_socket_ids = {}
 @app.get("/chat")
 @is_not_permabanned
 def chat(v):
+	if TRUESCORE_CHAT_LIMIT and v.truescore < TRUESCORE_CHAT_LIMIT and not v.club_allowed:
+		abort(403, f"Need at least {TRUESCORE_CHAT_LIMIT} truescore for access to chat.")
 	return render_template("chat.html", v=v, messages=messages)
 
 
 @socketio.on('speak')
 @limiter.limit("3/second;10/minute")
-@limiter.limit("3/second;10/minute", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
 @is_not_permabanned
+@ratelimit_user("3/second;10/minute")
 def speak(data, v):
 	if v.is_banned: return '', 403
+	if TRUESCORE_CHAT_LIMIT and v.truescore < TRUESCORE_CHAT_LIMIT and not v.club_allowed: return '', 403
 
 	vname = v.username.lower()
-	if vname in muted:
+	if vname in muted and not v.admin_level >= PERMS['CHAT_BYPASS_MUTE']:
 		if time.time() < muted[vname]: return '', 403
 		else: del muted[vname]
 
 	global messages, total
 
-	if SITE.startswith('rdrama.'): text = data['message'][:200].strip()
-	else: text = data['message'][:1000].strip()
+	text = sanitize_raw_body(data['message'], False)[:CHAT_LENGTH_LIMIT]
+	if not text: return '', 400
 
-	if not text: return '', 403
 	text_html = sanitize(text, count_marseys=True)
 	quotes = data['quotes']
 	recipient = data['recipient']
-	data={
+	data = {
 		"id": str(uuid.uuid4()),
 		"quotes": quotes,
 		"avatar": v.profile_url,
@@ -91,7 +93,7 @@ def speak(data, v):
 	else:
 		emit('speak', data, broadcast=True)
 		messages.append(data)
-		messages = messages[-100:]
+		messages = messages[-500:]
 
 	total += 1
 

@@ -1,26 +1,27 @@
-from files.helpers.wrappers import *
+import os
+from collections import Counter
+from json import loads
+from shutil import copyfile
+
+import gevent
+
+from files.classes import *
+from files.helpers.actions import *
 from files.helpers.alerts import *
-from files.helpers.media import *
+from files.helpers.cloudflare import purge_files_in_cache
 from files.helpers.const import *
+from files.helpers.get import *
+from files.helpers.marsify import marsify
+from files.helpers.media import *
+from files.helpers.owoify import owoify
 from files.helpers.regex import *
+from files.helpers.sanitize import filter_emojis_only
 from files.helpers.slots import *
 from files.helpers.treasure import *
-from files.helpers.actions import *
-from files.helpers.get import *
-from files.classes import *
 from files.routes.front import comment_idlist
-from flask import *
-from files.__main__ import app, limiter
-from files.helpers.sanitize import filter_emojis_only
-from files.helpers.marsify import marsify
-from files.helpers.owoify import owoify
-from files.helpers.cloudflare import purge_files_in_cache
-import requests
-from shutil import copyfile
-from json import loads
-from collections import Counter
-import gevent
-import os
+from files.routes.routehelpers import execute_shadowban_viewers_and_voters
+from files.routes.wrappers import *
+from files.__main__ import app, cache, limiter
 
 WORDLE_COLOR_MAPPINGS = {-1: "🟥", 0: "🟨", 1: "🟩"}
 
@@ -28,10 +29,6 @@ WORDLE_COLOR_MAPPINGS = {-1: "🟥", 0: "🟨", 1: "🟩"}
 @app.get("/post/<pid>/<anything>/<cid>")
 @app.get("/h/<sub>/comment/<cid>")
 @app.get("/h/<sub>/post/<pid>/<anything>/<cid>")
-@app.get("/logged_out/comment/<cid>")
-@app.get("/logged_out/post/<pid>/<anything>/<cid>")
-@app.get("/logged_out/h/<sub>/comment/<cid>")
-@app.get("/logged_out/h/<sub>/post/<pid>/<anything>/<cid>")
 @auth_desired_with_logingate
 def post_pid_comment_cid(cid, pid=None, anything=None, v=None, sub=None):
 	comment = get_comment(cid, v=v)
@@ -77,6 +74,9 @@ def post_pid_comment_cid(cid, pid=None, anything=None, v=None, sub=None):
 		# props won't save properly unless you put them in a list
 		output = get_comments_v_properties(v, False, None, Comment.top_comment_id == c.top_comment_id)[1]
 	post.replies=[top_comment]
+
+	execute_shadowban_viewers_and_voters(v, post)
+	execute_shadowban_viewers_and_voters(v, comment)
 			
 	if v and v.client: return top_comment.json
 	else: 
@@ -106,6 +106,7 @@ def comment(v):
 		parent_post = get_post(parent.parent_submission, v=v)
 		parent_comment_id = parent.id
 		if parent.author_id == v.id: rts = True
+		if not v.can_post_in_ghost_threads and parent_post.ghost: abort(403, f"You need {TRUESCORE_GHOST_LIMIT} truescore to post in ghost threads")
 	else: abort(400)
 
 	level = 1 if isinstance(parent, Submission) else parent.level + 1
@@ -145,13 +146,13 @@ def comment(v):
 		choices.append(i.group(1))
 		body = body.replace(i.group(0), "")
 
-	if request.files.get("file") and request.headers.get("cf-ipcountry") != "T1":
+	if request.files.get("file") and not g.is_tor:
 		files = request.files.getlist('file')[:4]
 		for file in files:
 			if file.content_type.startswith('image/'):
 				oldname = f'/images/{time.time()}'.replace('.','') + '.webp'
 				file.save(oldname)
-				image = process_image(oldname, patron=v.patron)
+				image = process_image(oldname, v)
 				if image == "": abort(400, "Image upload failed")
 				if v.admin_level >= PERMS['SITE_SETTINGS_SIDEBARS_BANNERS_BADGES'] and level == 1:
 					def process_sidebar_or_banner(type, resize=0):
@@ -160,7 +161,7 @@ def comment(v):
 						num = int(li.split('.webp')[0]) + 1
 						filename = f'files/assets/images/{SITE_NAME}/{type}/{num}.webp'
 						copyfile(oldname, filename)
-						process_image(filename, resize=resize)
+						process_image(filename, v, resize=resize)
 
 					if parent_post.id == SIDEBAR_THREAD:
 						process_sidebar_or_banner('sidebar', 400)
@@ -180,15 +181,15 @@ def comment(v):
 							g.db.flush()
 							filename = f'files/assets/images/badges/{badge.id}.webp'
 							copyfile(oldname, filename)
-							process_image(filename, resize=300)
+							process_image(filename, v, resize=300)
 							purge_files_in_cache(f"https://{SITE}/assets/images/badges/{badge.id}.webp")
 						except Exception as e:
 							abort(400, str(e))
 				body += f"\n\n![]({image})"
 			elif file.content_type.startswith('video/'):
-				body += f"\n\n{SITE_FULL}{process_video(file)}"
+				body += f"\n\n{SITE_FULL}{process_video(file, v)}"
 			elif file.content_type.startswith('audio/'):
-				body += f"\n\n{SITE_FULL}{process_audio(file)}"
+				body += f"\n\n{SITE_FULL}{process_audio(file, v)}"
 			else:
 				abort(415)
 
@@ -221,6 +222,7 @@ def comment(v):
 		or (SITE == 'pcmemes.net' and v.id == SNAPPY_ID))
 
 	execute_antispam_comment_check(body, v)
+	execute_antispam_duplicate_comment_check(v, body_html)
 
 	if len(body_html) > COMMENT_BODY_HTML_LENGTH_LIMIT: abort(400)
 
@@ -246,17 +248,21 @@ def comment(v):
 	else: c.top_comment_id = parent.top_comment_id
 
 	for option in options:
+		body_html = filter_emojis_only(option)
+		if len(body_html) > 500: abort(400, "Poll option too long!")
 		option = CommentOption(
 			comment_id=c.id,
-			body_html=filter_emojis_only(option),
+			body_html=body_html,
 			exclusive=0
 		)
 		g.db.add(option)
 
 	for choice in choices:
+		body_html = filter_emojis_only(choice)
+		if len(body_html) > 500: abort(400, "Poll option too long!")
 		choice = CommentOption(
 			comment_id=c.id,
-			body_html=filter_emojis_only(choice),
+			body_html=body_html,
 			exclusive=1
 		)
 		g.db.add(choice)
@@ -310,7 +316,7 @@ def comment(v):
 			n = Notification(comment_id=c.id, user_id=x)
 			g.db.add(n)
 
-		if parent.author.id != v.id and PUSHER_ID != 'blahblahblah' and not v.shadowbanned:
+		if parent.author.id != v.id and PUSHER_ID != DEFAULT_CONFIG_VALUE and not v.shadowbanned:
 			interests = f'{SITE}{parent.author.id}'
 
 			title = f'New reply by @{c.author_name}'
@@ -343,8 +349,6 @@ def comment(v):
 
 	c.voted = 1
 	
-	execute_pizza_autovote(v, c)
-
 	if v.marseyawarded and parent_post.id not in ADMIGGER_THREADS and marseyaward_body_regex.search(body_html):
 		abort(403, "You can only type marseys!")
 
@@ -362,7 +366,7 @@ def comment(v):
 
 	g.db.flush()
 
-	if v.client: return c.json
+	if v.client: return c.json(g.db)
 	return {"comment": render_template("comments.html", v=v, comments=[c])}
 
 
@@ -370,7 +374,7 @@ def comment(v):
 @app.post("/edit_comment/<cid>")
 @limiter.limit("1/second;10/minute;100/hour;200/day")
 @limiter.limit("1/second;10/minute;100/hour;200/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
-@auth_required
+@is_not_permabanned
 def edit_comment(cid, v):
 	c = get_comment(cid, v=v)
 
@@ -382,10 +386,10 @@ def edit_comment(cid, v):
 
 	body = sanitize_raw_body(request.values.get("body", ""), False)
 
-	if len(body) < 1 and not (request.files.get("file") and request.headers.get("cf-ipcountry") != "T1"):
+	if len(body) < 1 and not (request.files.get("file") and not g.is_tor):
 		abort(400, "You have to actually type something!")
 
-	if body != c.body or request.files.get("file") and request.headers.get("cf-ipcountry") != "T1":
+	if body != c.body or request.files.get("file") and not g.is_tor:
 		if v.longpost and (len(body) < 280 or ' [](' in body or body.startswith('[](')):
 			abort(403, "You have to type more than 280 characters!")
 		elif v.bird and len(body) > 140:
@@ -393,25 +397,29 @@ def edit_comment(cid, v):
 
 		for i in poll_regex.finditer(body):
 			body = body.replace(i.group(0), "")
+			body_html = filter_emojis_only(i.group(1))
+			if len(body_html) > 500: abort(400, "Poll option too long!")
 			option = CommentOption(
 				comment_id=c.id,
-				body_html=filter_emojis_only(i.group(1)),
+				body_html=body_html,
 				exclusive = 0
 			)
 			g.db.add(option)
 
 		for i in choice_regex.finditer(body):
 			body = body.replace(i.group(0), "")
+			body_html = filter_emojis_only(i.group(1))
+			if len(body_html) > 500: abort(400, "Poll option too long!")
 			option = CommentOption(
 				comment_id=c.id,
-				body_html=filter_emojis_only(i.group(1)),
+				body_html=body_html,
 				exclusive = 1
 			)
 			g.db.add(option)
 
 		execute_antispam_comment_check(body, v)
 
-		body += process_files()
+		body += process_files(request.files, v)
 		body = body.strip()[:COMMENT_BODY_LENGTH_LIMIT] # process_files potentially adds characters to the post
 
 		body_for_sanitize = body
@@ -455,21 +463,15 @@ def edit_comment(cid, v):
 
 
 @app.post("/delete/comment/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def delete_comment(cid, v):
-
 	c = get_comment(cid, v=v)
-
 	if not c.deleted_utc:
-
 		if c.author_id != v.id: abort(403)
-
 		c.deleted_utc = int(time.time())
-
 		g.db.add(c)
-		
 		cache.delete_memoized(comment_idlist)
 
 		g.db.flush()
@@ -479,26 +481,19 @@ def delete_comment(cid, v):
 			Comment.deleted_utc == 0
 		).count()
 		g.db.add(v)
-
 	return {"message": "Comment deleted!"}
 
 @app.post("/undelete/comment/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def undelete_comment(cid, v):
-
 	c = get_comment(cid, v=v)
-
 	if c.deleted_utc:
 		if c.author_id != v.id: abort(403)
-
 		c.deleted_utc = 0
-
 		g.db.add(c)
-
 		cache.delete_memoized(comment_idlist)
-
 		g.db.flush()
 		v.comment_count = g.db.query(Comment).filter(
 			Comment.author_id == v.id,
@@ -506,13 +501,11 @@ def undelete_comment(cid, v):
 			Comment.deleted_utc == 0
 		).count()
 		g.db.add(v)
-
 	return {"message": "Comment undeleted!"}
 
-
 @app.post("/pin_comment/<cid>")
-@auth_required
 @feature_required('PINS')
+@auth_required
 def pin_comment(cid, v):
 	
 	comment = get_comment(cid, v=v)
@@ -555,9 +548,9 @@ def unpin_comment(cid, v):
 
 
 @app.post("/save_comment/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def save_comment(cid, v):
 
 	comment=get_comment(cid)
@@ -572,9 +565,9 @@ def save_comment(cid, v):
 	return {"message": "Comment saved!"}
 
 @app.post("/unsave_comment/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def unsave_comment(cid, v):
 
 	comment=get_comment(cid)
@@ -608,9 +601,9 @@ def diff_words(answer, guess):
 
 
 @app.post("/wordle/<cid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def handle_wordle_action(cid, v):
 	comment = get_comment(cid)
 

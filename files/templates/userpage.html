@@ -13,7 +13,7 @@
 <meta property="og:article:author" content="@{{u.username}}">
 <meta property="article:section" content="{{u.username}}'s profile - {{SITE_NAME}}">
 <meta property="article:published_time" content="{{u.created_date}}">
-<meta property="og:description" name="description" content="{{u.coins}} coins - Joined {{u.created_date}} - {% if u.stored_subscriber_count >=1 and not u.is_private and not u.is_nofollow %}{{u.stored_subscriber_count}} Followers - {% endif %}{% if not u.is_private %} {{0 if u.shadowbanned else u.post_count}} Posts - {{0 if u.shadowbanned else u.comment_count}} Comments{% endif %}{% if u.bio %} - {{u.bio}}{% endif %}">
+<meta property="og:description" name="description" content="{{u.coins}} coins - Joined {{u.created_date}} - {% if u.stored_subscriber_count >=1 and not u.is_private %}{{u.stored_subscriber_count}} Followers - {% endif %}{% if not u.is_private %} {{0 if u.shadowbanned else u.post_count}} Posts - {{0 if u.shadowbanned else u.comment_count}} Comments{% endif %}{% if u.bio %} - {{u.bio}}{% endif %}">
 <meta property="og:author" name="author" content="@{{u.username}}">
 <meta property="og:title" content="{{u.username}}">
 <meta property="og:image" content="{{u.banner_url}}">
@@ -24,12 +24,12 @@
 <meta name="twitter:site" content="{{SITE_FULL}}">
 <meta name="twitter:title" content="{{u.username}}'s profile - {{SITE_NAME}}">
 <meta name="twitter:creator" content="@{{u.username}}">
-<meta name="twitter:description" content="{{u.coins}} coins - Joined {{u.created_date}} - {% if u.stored_subscriber_count >=1 and not u.is_private and not u.is_nofollow %}{{u.stored_subscriber_count}} Followers -{% endif %} {% if not u.is_private %} {{0 if u.shadowbanned else u.post_count}} Posts - {{0 if u.shadowbanned else u.comment_count}} Comments{% endif %}{% if u.bio %} - {{u.bio}}{% endif %}">
+<meta name="twitter:description" content="{{u.coins}} coins - Joined {{u.created_date}} - {% if u.stored_subscriber_count >=1 and not u.is_private %}{{u.stored_subscriber_count}} Followers -{% endif %} {% if not u.is_private %} {{0 if u.shadowbanned else u.post_count}} Posts - {{0 if u.shadowbanned else u.comment_count}} Comments{% endif %}{% if u.bio %} - {{u.bio}}{% endif %}">
 <meta name="twitter:image" content="{{u.banner_url}}">
 <meta name="twitter:url" content="{{u.url}}">
 {% endblock %}
 
-{% import 'userpage_admintools.html' as userpage_admintools with context %}
+{% import 'userpage/admintools.html' as userpage_admintools with context %}
 {% set hats_total = u.hats_owned_proportion_display[1] if u else 0 %}
 {% set hats_owned_percent = u.hats_owned_proportion_display[0] if u else '' %}
 
@@ -97,7 +97,7 @@
 
 				<div class="font-weight-bolder">
 					<span id="profile-coins-amount">{{u.coins}}</span>
-					<img alt="coins" class="ml-1 mb-1 mr-2" data-bs-toggle="tooltip" data-bs-placement="bottom" title="coins" height="20" src="{{'coins.webp' | asset_siteimg}}">
+					<img alt="coins" class="ml-1 mb-1 mr-2" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Coins" height="20" src="{{'coins.webp' | asset_siteimg}}">
 
 					{% if FEATURES['PROCOINS'] %}
 						<span id="profile-bux-amount">{{u.procoins}}</span>
@@ -153,7 +153,7 @@
 						<p class="text-uppercase my-0 pb-1" style="font-weight: bold; font-size: 12px;">Moderator of</p>
 						{% for a in u.moderated_subs %}
 							<span class="d-inline-block mx-1">
-								<a href="/h/{{a['sub']}}">/h/{{a['sub']}}</a>
+								<a href="/h/{{a}}">/h/{{a}}</a>
 							</span>
 						{% endfor %}
 					</div>
@@ -166,7 +166,7 @@
 							<div class="actionbtns mb-3">
 								<button type="button" id="button-unsub" class="btn btn-secondary {% if not is_following %}d-none{% endif %}" onclick="postToastSwitch(this,'/unfollow/{{u.username}}','button-unsub','button-sub','d-none')">Unfollow</button>
 
-								<button type="button" id="button-sub" class="btn btn-primary {% if is_following or u.is_nofollow or u.is_blocked %}d-none{% endif %}" onclick="postToastSwitch(this,'/follow/{{u.username}}','button-unsub','button-sub','d-none')">Follow</button>						
+								<button type="button" id="button-sub" class="btn btn-primary {% if is_following or u.is_blocked %}d-none{% endif %}" onclick="postToastSwitch(this,'/follow/{{u.username}}','button-unsub','button-sub','d-none')">Follow</button>
 								<button type="button" class="btn btn-primary" onclick="toggleElement('message', 'input-message')">Message</button>
 
 								{% if FEATURES['USERS_SUICIDE'] -%}
@@ -181,7 +181,7 @@
 							</div>
 						</div>
 						<form class="d-none toggleable" id="message" action="/@{{u.username}}/message" onsubmit="sendMessage(event)">
-							<input type="hidden" name="formkey" value="{{v.formkey}}"> 
+							<input type="hidden" name="formkey" value="{{v|formkey}}"> 
 							<textarea autocomplete="off" id="input-message" form="message" name="message" rows="3" minlength="1" maxlength="10000" class="form-control b2 mt-1" data-preview="message-preview" oninput="markdown(this)" required></textarea>
 							<pre class="btn btn-secondary format d-inline-block m-0 fas fa-smile-beam" onclick="loadEmojis('input-message')" aria-hidden="true" data-bs-toggle="modal" data-bs-target="#emojiModal" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Add Emoji"></pre>
 							&nbsp;
@@ -230,9 +230,13 @@
 							<p id="profile--info--private">User has private mode enabled</p>
 						{% endif %}
 						{% if v and (v.admin_level >= PERMS['VIEW_ALTS'] or v.alt) %}
-							<span id="profile--alts">Alts:</span>
+							{% if v.admin_level >= PERMS['USER_LINK'] %}
+								<span id="profile--alts"><a href="/@{{u.username}}/alts">Alts</a>:</span>
+							{% else %}
+								<span id="profile--alts">Alts:</span>
+							{% endif %}
 							<ul id="profile--alts-list">
-								{% for account in u.alts_unique %}
+								{% for account in u.alts_unique if not account._alt_deleted and (v.can_see_shadowbanned or not account.shadowbanned) %}
 									<li><a href="{{account.url}}">@{{account.username}}</a>{% if account._is_manual %} [m]{% endif %}</li>
 								{% endfor %}
 							</ul>
@@ -309,7 +313,7 @@
 						<i class="fas fa-broom text-admin align-middle ml-1" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Admin"></i>
 					</span>
 				{% endif %}
-				{% if v and v.id != u.id and v.has_follower(u) and not v.is_nofollow %}
+				{% if v and v.id != u.id and v.has_follower(u) %}
 					<span class="followsyou badge badge-secondary text-small align-middle mx-1" id="profile-mobile--follows-you">Follows you</span>
 				{% endif %}
 
@@ -327,7 +331,7 @@
 
 				<div class="font-weight-normal">
 					<span id="profile-coins-amount-mobile" class="font-weight-bold">{{u.coins}}</span>
-					<img alt="coins" class="ml-1 mb-1 mr-2" data-bs-toggle="tooltip" data-bs-placement="bottom" title="coins" height="15" src="{{'coins.webp' | asset_siteimg}}">
+					<img alt="coins" class="ml-1 mb-1 mr-2" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Coins" height="15" src="{{'coins.webp' | asset_siteimg}}">
 
 					{% if FEATURES['PROCOINS'] %}
 						<span id="profile-bux-amount-mobile" class="font-weight-bold">{{u.procoins}}</span>
@@ -384,7 +388,7 @@
 						<p class="text-uppercase my-0 pb-1" style="font-weight: bold; font-size: 12px;">Moderator of</p>
 						{% for a in u.moderated_subs %}
 							<span class="d-inline-block mx-1">
-								<a href="/h/{{a['sub']}}">/h/{{a['sub']}}</a>
+								<a href="/h/{{a}}">/h/{{a}}</a>
 							</span>
 						{% endfor %}
 					</div>
@@ -417,7 +421,7 @@
 					{% if v and v.id != u.id %}
 						<button type="button" id="button-unsub2" class="btn btn-secondary {% if not is_following %}d-none{% endif %}" onclick="postToastSwitch(this,'/unfollow/{{u.username}}','button-unsub2','button-sub2','d-none')">Unfollow</button>
 
-						<button type="button" id="button-sub2" class="btn btn-primary {% if is_following or u.is_nofollow or u.is_blocked %}d-none{% endif %}" onclick="postToastSwitch(this,'/follow/{{u.username}}','button-unsub2','button-sub2','d-none')">Follow</button>
+						<button type="button" id="button-sub2" class="btn btn-primary {% if is_following or u.is_blocked %}d-none{% endif %}" onclick="postToastSwitch(this,'/follow/{{u.username}}','button-unsub2','button-sub2','d-none')">Follow</button>
 
 						<button type="button" class="btn btn-primary" onclick="toggleElement('message-mobile', 'input-message-mobile')">Message</button>
 						{% if FEATURES['USERS_SUICIDE'] -%}
@@ -434,7 +438,7 @@
 
 				{% if v and v.id != u.id %}
 					<form class="d-none toggleable" id='message-mobile' action="/@{{u.username}}/message" onsubmit="sendMessage(event)">
-						<input class="mt-1" type="hidden" name="formkey" value="{{v.formkey}}"> 
+						<input class="mt-1" type="hidden" name="formkey" value="{{v|formkey}}"> 
 						<textarea autocomplete="off" id="input-message-mobile" form="message-mobile" name="message" rows="3" minlength="1" maxlength="10000" class="form-control" data-preview="message-preview-mobile" oninput="markdown(this)" required></textarea>
 						<pre class="mt-1 btn btn-secondary format d-inline-block m-0 fas fa-smile-beam" onclick="loadEmojis('input-message-mobile')" aria-hidden="true" data-bs-toggle="modal" data-bs-target="#emojiModal" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Add Emoji"></pre>
 						&nbsp;
@@ -469,11 +473,15 @@
 						<p id="profile-mobile--info--private">User has private mode enabled</p>
 					{% endif %}
 					{% if v and (v.admin_level >= PERMS['VIEW_ALTS'] or v.alt) %}
-						<span id="profile-mobile--alts">Alts:</span>
+						{% if v.admin_level >= PERMS['USER_LINK'] %}
+							<span id="profile-mobile--alts"><a href="/@{{u.username}}/alts">Alts</a>:</span>
+						{% else %}
+							<span id="profile-mobile--alts">Alts:</span>
+						{% endif %}:
 						<ul id="profile-mobile--alts-list">
-							{% for account in u.alts_unique %}
-								<li><a href="{{account.url}}">@{{account.username}}</a>{% if account._is_manual %} [m]{% endif %}</li>
-							{% endfor %}
+						{% for account in u.alts_unique if not account._alt_deleted and (v.can_see_shadowbanned or not account.shadowbanned) %}
+							<li><a href="{{account.url}}">@{{account.username}}</a>{% if account._is_manual %} [m]{% endif %}</li>
+						{% endfor %}
 						</ul>
 					{% endif %}
 				</div>
@@ -616,7 +624,7 @@
 {% endif %}
 
 {% if v and v.id != u.id and '/comments' not in request.path %}
-	{% include "emoji_modal.html" %}
+	{% include "modals/emoji.html" %}
 {% endif %}
 
 {% endblock %}

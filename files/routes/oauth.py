@@ -1,11 +1,11 @@
-from files.helpers.wrappers import *
-from files.helpers.alerts import *
-from files.helpers.get import *
-from files.helpers.const import *
-from files.classes import *
-from flask import *
-from files.__main__ import app, limiter
 import sqlalchemy.exc
+
+from files.classes import *
+from files.helpers.alerts import *
+from files.helpers.const import *
+from files.helpers.get import *
+from files.routes.wrappers import *
+from files.__main__ import app, limiter
 
 @app.get("/authorize")
 @auth_required
@@ -15,13 +15,11 @@ def authorize_prompt(v):
 	if not application: return {"oauth_error": "Invalid `client_id`"}, 401
 	return render_template("oauth.html", v=v, application=application)
 
-
 @app.post("/authorize")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def authorize(v):
-
 	client_id = request.values.get("client_id")
 	application = g.db.query(OauthApp).filter_by(client_id=client_id).one_or_none()
 	if not application: return {"oauth_error": "Invalid `client_id`"}, 401
@@ -37,11 +35,10 @@ def authorize(v):
 
 	return redirect(f"{application.redirect_uri}?token={access_token}")
 
-
 @app.post("/rescind/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def rescind(v, aid):
 
 	auth = g.db.query(ClientAuth).filter_by(oauth_client = aid, user_id = v.id).one_or_none()
@@ -51,9 +48,9 @@ def rescind(v, aid):
 
 
 @app.post("/api_keys")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @is_not_permabanned
+@ratelimit_user()
 def request_api_keys(v):
 
 	new_app = OauthApp(
@@ -93,9 +90,9 @@ def request_api_keys(v):
 
 
 @app.post("/delete_app/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def delete_oauth_app(v, aid):
 	try:
 		aid = int(aid)
@@ -116,9 +113,9 @@ def delete_oauth_app(v, aid):
 
 
 @app.post("/edit_app/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @is_not_permabanned
+@ratelimit_user()
 def edit_oauth_app(v, aid):
 	try:
 		aid = int(aid)
@@ -140,7 +137,7 @@ def edit_oauth_app(v, aid):
 
 
 @app.post("/admin/app/approve/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['APPS_MODERATION'])
 def admin_app_approve(v, aid):
 
@@ -176,7 +173,7 @@ def admin_app_approve(v, aid):
 
 
 @app.post("/admin/app/revoke/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['APPS_MODERATION'])
 def admin_app_revoke(v, aid):
 
@@ -201,7 +198,7 @@ def admin_app_revoke(v, aid):
 
 
 @app.post("/admin/app/reject/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @admin_level_required(PERMS['APPS_MODERATION'])
 def admin_app_reject(v, aid):
 
@@ -233,7 +230,7 @@ def admin_app_id_posts(v, aid):
 	oauth = g.db.get(OauthApp, aid)
 	if not oauth: abort(404)
 
-	pids=oauth.idlist(page=int(request.values.get("page",1)))
+	pids=oauth.idlist(g.db, page=int(request.values.get("page",1)))
 
 	next_exists=len(pids)==101
 	pids=pids[:100]
@@ -256,8 +253,7 @@ def admin_app_id_comments(v, aid):
 	oauth = g.db.get(OauthApp, aid)
 	if not oauth: abort(404)
 
-	cids=oauth.comments_idlist(page=int(request.values.get("page",1)),
-		)
+	cids=oauth.comments_idlist(g.db, page=int(request.values.get("page",1)))
 
 	next_exists=len(cids)==101
 	cids=cids[:100]
@@ -284,9 +280,9 @@ def admin_apps_list(v):
 
 
 @app.post("/reroll/<aid>")
-@limiter.limit("1/second;30/minute;200/hour;1000/day")
-@limiter.limit("1/second;30/minute;200/hour;1000/day", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
+@limiter.limit(DEFAULT_RATELIMIT_SLOWER)
 @auth_required
+@ratelimit_user()
 def reroll_oauth_tokens(aid, v):
 
 	aid = aid
