@@ -1,4 +1,4 @@
-from os import path, getcwd
+from os import path
 import subprocess
 from importlib import import_module
 
@@ -16,29 +16,33 @@ from events.helpers import *
 from events.routes import *
 
 def link_assets():
-	root = getcwd()
-	assets = ["assets/css", "assets/js", "assets/fonts",\
-	 "assets/images", "assets/media", "templates"]
+	asset_dirs = { # We assume WD is always in root of repository
+		"files/assets/css": "../../../events/assets/css",
+		"files/assets/js": "../../../events/assets/js",
+		"files/assets/fonts": "../../../events/assets/fonts",
+		"files/assets/images": "../../../events/assets/images",
+		"files/assets/media": "../../../events/assets/media",
+		"files/templates": "../../events/templates",
+	}
 
-	print("linking event assets...")
+	print("[EVENT] Linking event assets...")
 
-	for directory in assets:
-		src = root + "/events/" + directory
-		dest = root + "/files/" + directory + "/event"
+	for link_dir in asset_dirs:
+		target = asset_dirs[link_dir]
+		link = link_dir + "/event"
 
 		try:
-			if path.exists(dest):
-				subprocess.run(["rm", dest])
-				print("path " + directory + " already exists, removing")
+			if path.exists(link):
+				subprocess.run(["rm", link])
 
-			subprocess.run(["ln", "-s", src, dest])
-			print("linked " + src + " -> " + dest)
+			subprocess.run(["ln", "-s", target, link])
+			print("[EVENT] Linked " + link + " -> " + target)
 		except Exception as e:
 			print(e)
 
 def build_table():
 	if not inspect(engine).has_table("event", schema="public"):
-		print("building event table...")
+		print("[EVENT] Building event table...")
 
 		with app.app_context():
 			g.db = db_session()

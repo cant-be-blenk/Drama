@@ -26,8 +26,3 @@ files/assets/js/chat_done.js
 #event symlinks
 files/assets/**/event
 files/templates/event
-events/assets/css/css
-events/assets/fonts/fonts
-events/assets/images/images
-events/assets/js/js
-events/assets/media/media
