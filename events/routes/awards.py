@@ -46,7 +46,7 @@ def award_thing_event(v, kind, author):
 			if badge: g.db.delete(badge)
 		elif event_author.hw_zombie >= 0:
 			event_author.hw_zombie += 2
-			event_author.hw_zombie = min(author.hw_zombie, 10)
+			event_author.hw_zombie = min(event_author.hw_zombie, 10)
 
 			badge_grant(user=author, badge_id=182)
 	elif kind == "jumpscare":
