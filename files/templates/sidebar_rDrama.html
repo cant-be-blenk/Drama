@@ -1,4 +1,3 @@
-{%- import 'util/macros.html' as macros with context -%}
 <div class="col sidebar text-left {% if '/sidebar' not in request.path %}d-none d-lg-block{% endif %} pt-3" {% if request.path != '/sidebar' %}id="sidebar-content"{% endif %}>
 
 	{% if sub %}
