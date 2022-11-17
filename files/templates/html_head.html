@@ -91,7 +91,7 @@
 			</style>
 		{% endif %}
 		{% if include_user_css %}
-			{% if not EVENT_ACTIVE %}
+			{% if not EVENT_STYLES %}
 			<link rel="stylesheet" href="{{('css/'~v.theme~'.css') | asset}}">
 			{% endif %}
 			{% if v.css and not request.path.startswith('/settings/css') %}
@@ -121,11 +121,9 @@
 	{% if SITE_NAME == 'rDrama' %}
 		<link rel="stylesheet" href="{{'css/rDrama.css' | asset}}">
 	{% endif %}
-	
-	{% if EVENT_ACTIVE %}
-		<link rel="stylesheet" href="/assets/css/event/{{EVENT_STYLES}}">
-	{% endif %}
-	
+
+	<link rel="stylesheet" href="/assets/css/event/{{EVENT_STYLES}}">
+
 	{{extra_css}}
 {% endmacro %}
 

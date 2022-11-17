@@ -32,6 +32,9 @@ from .marsey import *
 from .transactions import *
 from .sub_logs import *
 from .media import *
-from .events import *
+
 if FEATURES['STREAMERS']:
     from .streamers import *
+
+if FEATURES['HOLIDAY_EVENT']:
+    from .events import *

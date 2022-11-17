@@ -30,17 +30,20 @@
 	{% include "modals/expanded_image.html" %}
 
 	{% if '@' not in request.path %}
+		{% if EVENT_BANNER and not sub %}
+			{% include 'event/' + EVENT_BANNER %}
+		{% else %}
+			{% if sub and SITE_NAME != WPD %}
+				{% set src = sub.banner_url %}
+				{% set alt = ['/h/', sub, 'banner']|join %}
+				{% set class = 'site-banner-hole' %}
+			{% elif SITE_NAME == "rDrama" %}
+				{% set href = "https://secure.transequality.org/site/Donation2?df_id=1480" %}
+				{% set expand = false %}
+			{% endif %}
 
-		{% if sub and SITE_NAME != WPD %}
-			{% set src = sub.banner_url %}
-			{% set alt = ['/h/', sub, 'banner']|join %}
-			{% set class = 'site-banner-hole' %}
-		{% elif SITE_NAME == "rDrama" %}
-			{% set href = "https://secure.transequality.org/site/Donation2?df_id=1480" %}
-			{% set expand = false %}
+			{{ macros.banner(src, href, alt, expand, class) }}
 		{% endif %}
-
-		{{ macros.banner(src, href, alt, expand, class) }}
 	{% endif %}
 {% endblock %}
 
@@ -73,15 +76,14 @@
 			{% endblock %}
 
 		</div>
+
 		{% block sidebar %}
 			{% if has_sidebar and (home or p) %}
-				{% if not EVENT_ACTIVE %}
-					{% include "sidebar_" + SITE_NAME + ".html" %}
-				{% else %}
-					{% include "event/sidebar_" + SITE_NAME + ".html" %}
-				{% endif %}
+				{% set sidebar = "sidebar_" + SITE_NAME + ".html" %}
+				{% include sidebar if not EVENT_SIDEBAR else ['event/', sidebar]|join %}
 			{% endif %}
 		{% endblock %}
+
 	</div>
 </div>
 
@@ -101,6 +103,8 @@
 {% block GIFpicker %}
 {% endblock %}
 
+{% block music %}
+{% endblock %}
 
 <div class="toast clipboard" id="toast-success" role="alert" aria-live="assertive" aria-atomic="true" data-bs-animation="true" data-bs-autohide="true" data-bs-delay="5000">
 	<div class="toast-body text-center">

@@ -1,3 +1,59 @@
-from events import load_module, link_assets, EVENT_ACTIVE
-event = load_module("helpers")
-link_assets()
+from os import path
+import subprocess
+from importlib import import_module
+
+from files.__main__ import app, db_session, engine
+from flask import g
+from sqlalchemy import inspect
+
+from files.classes import Event
+from files.helpers.const import AWARDS, AWARDS2, AWARDS_DISABLED
+
+from events import *
+from events.table import *
+
+def link_assets():
+	root = "/rDrama"
+	assets = ["assets/css", "assets/js", "assets/fonts",\
+	 "assets/images", "assets/media", "templates"]
+
+	print("linking event assets...")
+
+	for directory in assets:
+		src = root + "/events/" + directory
+		dest = root + "/files/" + directory + "/event"
+
+		try:
+			if path.exists(dest):
+				subprocess.run(["rm", dest])
+				print("path " + directory + " already exists, removing")
+
+			subprocess.run(["ln", "-s", src, dest])
+			print("linked " + src + " -> " + dest)
+		except Exception as e:
+			print(e)
+
+def build_table():
+	if not inspect(engine).has_table("event", schema="public"):
+		print("building event table...")
+
+		with app.app_context():
+			g.db = db_session()
+
+			Event.__table__.create(bind=g.db.bind, checkfirst=True)
+			g.db.commit()
+
+def populate_awards():
+	temp = {x: AWARDS2[x] for x in AWARDS2 if x not in EVENT_AWARDS}
+	AWARDS2.clear()
+	AWARDS2.update(EVENT_AWARDS)
+	AWARDS2.update(temp)
+
+	for award in EVENT_AWARDS:
+		if award in AWARDS_DISABLED:
+			AWARDS_DISABLED.remove(award)
+
+def init_event():
+	link_assets()
+	build_table()
+	populate_awards()

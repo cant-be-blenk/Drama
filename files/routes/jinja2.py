@@ -12,8 +12,6 @@ from files.routes.routehelpers import get_formkey
 from files.routes.wrappers import calc_users
 from files.__main__ import app, cache
 
-from .events import *
-
 @app.template_filter("formkey")
 def formkey(u):
 	return get_formkey(u)
@@ -67,7 +65,6 @@ def inject_constants():
 			"HOUSE_JOIN_COST":HOUSE_JOIN_COST, "HOUSE_SWITCH_COST":HOUSE_SWITCH_COST, "IMAGE_FORMATS":IMAGE_FORMATS,
 			"PAGE_SIZES":PAGE_SIZES, "THEMES":THEMES, "COMMENT_SORTS":COMMENT_SORTS, "SORTS":SORTS, 
 			"TIME_FILTERS":TIME_FILTERS, "HOUSES":HOUSES, "TIERS_ID_TO_NAME":TIERS_ID_TO_NAME, 
-			"DEFAULT_CONFIG_VALUE":DEFAULT_CONFIG_VALUE, "EVENT_ACTIVE":EVENT_ACTIVE
+			"DEFAULT_CONFIG_VALUE":DEFAULT_CONFIG_VALUE
 			}
-	if EVENT_ACTIVE: constants.update(event.EVENT_JINJA_CONST)
 	return constants

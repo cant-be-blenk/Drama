@@ -1,34 +1,3 @@
-from os import path
-import subprocess
-from importlib import import_module
-
-from events.conf import *
-
-def load_module(module):
-	if not EVENT_ACTIVE: return None
-	try: return import_module("events." + EVENT_NAME + "." + module)
-	except Exception as e: 
-		print(e)
-		return None
-
-def link_assets():
-	if not EVENT_ACTIVE: return None
-	root = "/rDrama"
-	assets = ["assets/css", "assets/js", "assets/fonts",\
-	 "assets/images", "assets/media", "templates"]
-
-	print("linking event assets...")
-	
-	for directory in assets:
-		src = root + "/events/" + EVENT_NAME + "/" + directory
-		dest = root + "/files/" + directory + "/event"
-
-		try:
-			if path.exists(dest):
-				subprocess.run(["rm", dest])
-				print("path " + directory + " already exists, removing")
-				
-			subprocess.run(["ln", "-s", src, dest])
-			print("linked " + src + " -> " + dest)
-		except Exception as e:
-			print(e)
+from events.classes import *
+from events.helpers import *
+from events.routes import *

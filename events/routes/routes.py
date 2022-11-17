@@ -1,10 +1,4 @@
-from files.__main__ import app, limiter
-from files.helpers.wrappers import *
-from files.helpers.get import *
-from files.helpers.const import *
-from files.helpers.actions import *
-from files.classes.award import *
-from flask import g, request
+from files.__main__ import *
 
 @app.post("/trick-or-treat")
 @limiter.limit("1/hour", key_func=lambda:f'{SITE}-{session.get("lo_user")}')
@@ -37,4 +31,3 @@ def execute_jumpscare(v):
 		g.db.add(v)
 				
 	return {}
-

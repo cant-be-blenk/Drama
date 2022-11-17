@@ -1,8 +1,7 @@
 from flask import g
-from files.routes.awards import *
-from events.table import Event
+from files.classes import Event
 
-def event_award(v, kind, author):
+def award_thing_event(v, kind, author):
 	event_author = g.db.get(Event, author.id)
 	event_v = g.db.get(Event, v.id)
 	

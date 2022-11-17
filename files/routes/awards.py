@@ -19,8 +19,6 @@ from files.__main__ import app, cache, limiter
 
 from .front import frontlist
 
-from .events import *
-
 @app.get("/shop")
 @app.get("/settings/shop")
 @auth_required
@@ -392,9 +390,10 @@ def award_thing(v, thing_type, id):
 		if author.spider: author.spider += 86400
 		else: author.spider = int(time.time()) + 86400
 		badge_grant(user=author, badge_id=179, notify=False)
-	elif EVENT_ACTIVE:
-		if kind in event.EVENT_AWARDS:
-			event_routes.event_award(v, kind, author)
+	elif FEATURES['HOLIDAY_EVENT']:
+		from files.helpers.events import EVENT_AWARDS, award_thing_event
+		if kind in EVENT_AWARDS:
+			award_thing_event(v, kind, author)
 
 	if author.received_award_count: author.received_award_count += 1
 	else: author.received_award_count = 1

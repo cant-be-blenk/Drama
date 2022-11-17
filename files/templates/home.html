@@ -256,3 +256,10 @@
 {% endif %}
 
 {% endblock %}
+
+
+{% block music %}
+	{% if EVENT_MUSIC %}
+		{% include 'event/' + EVENT_MUSIC %}
+	{% endif %}
+{% endblock %}

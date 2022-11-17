@@ -24,8 +24,7 @@
 {% if SITE_NAME == 'PCM' %}
 	{% include "awards_PCM.html" %}
 {% endif %}
-
-{% if EVENT_ACTIVE %}
+{% if EVENT_AWARDS %}
 	{% include "event/awards.html" %}
 {% endif %}
 
@@ -680,4 +679,11 @@
 	<script defer src="{{'js/submission_admin.js' | asset}}"></script>
 {% endif %}
 
+{% endblock %}
+
+
+{% block music %}
+	{% if EVENT_MUSIC %}
+		{% include 'event/' + EVENT_MUSIC %}
+	{% endif %}
 {% endblock %}
