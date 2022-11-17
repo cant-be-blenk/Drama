@@ -35,6 +35,3 @@ from .media import *
 
 if FEATURES['STREAMERS']:
     from .streamers import *
-
-if FEATURES['HOLIDAY_EVENT']:
-    from .events import *

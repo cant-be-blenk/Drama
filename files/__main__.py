@@ -87,7 +87,7 @@ else:
 	from files.routes import *
 
 if FEATURES['HOLIDAY_EVENT']:
-	from files.helpers.events import *
+	from events import *
 	init_event()
 
 stdout.flush()

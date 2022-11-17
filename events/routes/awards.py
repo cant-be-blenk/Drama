@@ -1,5 +1,5 @@
 from flask import g
-from files.classes import Event
+from events import Event
 
 def award_thing_event(v, kind, author):
 	event_author = g.db.get(Event, author.id)
