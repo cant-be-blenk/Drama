@@ -5,7 +5,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-coffin-cross",
 		"color": "text-purple",
-		"price": 600
+		"price": 600,
+		"deflectable": true,
+		"cosmetic": false
 	},
 	"hw-bite": {
 		"kind": "hw-bite",
@@ -13,7 +15,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-biohazard",
 		"color": "text-danger",
-		"price": 500
+		"price": 500,
+		"deflectable": true,
+		"cosmetic": false
 	},
 	"hw-vax": {
 		"kind": "hw-vax",
@@ -21,7 +25,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-syringe",
 		"color": "text-blue",
-		"price": 500
+		"price": 500,
+		"deflectable": true,
+		"cosmetic": false
 	},
 	"hw-grinch": {
 		"kind": "hw-grinch",
@@ -29,7 +35,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-angry",
 		"color": "text-orange",
-		"price": 1000
+		"price": 1000,
+		"deflectable": true,
+		"cosmetic": false
 	},
 	"haunt": {
 		"kind": "haunt",
@@ -37,7 +45,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-book-dead",
 		"color": "text-warning",
-		"price": 500
+		"price": 500,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"stab": {
 		"kind": "stab",
@@ -45,7 +55,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-knife-kitchen",
 		"color": "text-danger",
-		"price": 300
+		"price": 300,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"spiders": {
 		"kind": "spiders",
@@ -53,7 +65,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-spider-web",
 		"color": "text-black",
-		"price": 200
+		"price": 200,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"fog": {
 		"kind": "fog",
@@ -61,7 +75,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-smoke",
 		"color": "text-gray",
-		"price": 200
+		"price": 200,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"flashlight": {
 		"kind": "flashlight",
@@ -69,7 +85,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-flashlight",
 		"color": "text-black",
-		"price": 400
+		"price": 400,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"candy-corn": {
 		"kind": "candy-corn",
@@ -77,7 +95,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-candy-corn",
 		"color": "text-orange",
-		"price": 400
+		"price": 400,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"ectoplasm": {
 		"kind": "ectoplasm",
@@ -85,7 +105,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-ghost",
 		"color": "text-success",
-		"price": 400
+		"price": 400,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"test_award": {
 		"kind": "test_award",
@@ -93,7 +115,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-lights-holiday",
 		"color": "",
-		"price": 400
+		"price": 400,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"bones": {
 		"kind": "bones",
@@ -101,7 +125,9 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-bone",
 		"color": "text-white",
-		"price": 500
+		"price": 500,
+		"deflectable": false,
+		"cosmetic": true
 	},
 	"pumpkin": {
 		"kind": "pumpkin",
@@ -109,6 +135,8 @@ EVENT_AWARDS = {
 		"description": "",
 		"icon": "fas fa-jack-o-lantern",
 		"color": "text-orange",
-		"price": 200
+		"price": 200,
+		"deflectable": false,
+		"cosmetic": true
 	}
 }
