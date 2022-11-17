@@ -137,7 +137,8 @@ def submit_get(v, sub=None):
 @auth_desired_with_logingate
 def post_id(pid, anything=None, v=None, sub=None):
 	post = get_post(pid, v=v)
-	if not post.can_see(v): abort(403)
+	if not User.can_see(v, post): abort(403)
+	if not User.can_see_content(v, post) and post.club: abort(403)
 
 	if post.over_18 and not (v and v.over_18) and session.get('over_18', 0) < int(time.time()):
 		if g.is_api_or_xhr: return {"error":"Must be 18+ to view"}, 451
@@ -147,8 +148,6 @@ def post_id(pid, anything=None, v=None, sub=None):
 	elif v: defaultsortingcomments = v.defaultsortingcomments
 	else: defaultsortingcomments = "hot"
 	sort = request.values.get("sort", defaultsortingcomments)
-
-	if post.club and not (v and (v.paid_dues or v.id == post.author_id)): abort(403)
 
 	if v:
 		execute_shadowban_viewers_and_voters(v, post)
@@ -634,7 +633,7 @@ def submit_post(v, sub=None):
 		# we also allow 'code contributor' badgeholders to post to the changelog hole
 		allowed = g.db.query(Badge.user_id).filter_by(badge_id=3).all()
 		allowed = [x[0] for x in allowed]
-		if v.id not in allowed: return error(f"You don't have sufficient permissions to post in /h/changelog")
+		if v.id not in allowed: return error("You don't have sufficient permissions to post in /h/changelog")
 
 	if sub in ('furry','vampire','racist','femboy') and not v.client and not v.house.lower().startswith(sub):
 		return error(f"You need to be a member of House {sub.capitalize()} to post in /h/{sub}")
