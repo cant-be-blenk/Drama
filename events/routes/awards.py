@@ -6,14 +6,14 @@ def award_thing_event(v, kind, author):
 	event_v = g.db.get(Event, v.id)
 	
 	if not event_author:
-		g.db.add(Event(id=author.id))
-		g.db.commit()
-		event_author = g.db.get(Event, author.id)
+		event_author = Event(id=author.id)
+		g.db.add(event_author)
 
 	if not event_v:
-		g.db.add(Event(id=v.id))
-		g.db.commit()
-		event_v = g.db.get(Event, v.id)
+		event_v = Event(id=author.id)
+		g.db.add(event_v)
+	
+	g.db.flush()
 		
 	if kind == "hw-bite":
 		if event_author.hw_zombie < 0:
