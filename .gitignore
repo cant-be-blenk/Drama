@@ -22,3 +22,7 @@ chat/.env
 # Chat artefacts
 files/assets/css/chat_done.css
 files/assets/js/chat_done.js
+
+#event symlinks
+files/assets/**/event
+files/templates/event
