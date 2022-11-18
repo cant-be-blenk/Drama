@@ -10,7 +10,7 @@ def award_thing_event(v, kind, author):
 		g.db.add(event_author)
 
 	if not event_v:
-		event_v = Event(id=author.id)
+		event_v = Event(id=v.id)
 		g.db.add(event_v)
 	
 	g.db.flush()
