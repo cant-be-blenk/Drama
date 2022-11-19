@@ -6366,3 +6366,15 @@ div.markdown {
 	object-fit: cover;
 	max-height: min(42vh,30vw) !important;
 }
+
+.new-user {
+	position: absolute;
+	left: -7px;
+	top: -10px;
+	bottom: 0;
+}
+
+.new-user-30 {
+	width: 45px;
+	height: 58px;
+}

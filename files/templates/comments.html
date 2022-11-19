@@ -171,6 +171,7 @@
 							{% if c.author.hat_active -%}
 								<img class="profile-pic-30-hat hat" loading="lazy" src="{{c.author.hat_active}}?h=7" data-bs-toggle="tooltip" data-bs-placement="bottom" title="{{c.author.hat_tooltip(v)}}">
 							{%- endif %}
+							{{macros.newfriend_hat(c.author, 30)}}
 						</div>
 						<span {% if c.author.patron and not c.distinguish_level %}class="patron" style="background-color:#{{c.author.name_color}};"{% elif c.distinguish_level %}class="mod"{% endif %}>{{c.author_name}}</span>
 					</a>
